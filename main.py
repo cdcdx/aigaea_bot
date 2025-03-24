@@ -1,4 +1,5 @@
 import os
+import re
 import platform
 import random
 import argparse
@@ -45,7 +46,8 @@ async def gaea_run_modules(module, runname, runid, runthread):
     id=0
     for data in datas:
         parts = data.split(',')
-        if len(parts) < 4:
+        if len(parts) < 6:
+            logger.error(f"Invalid data: ({len(parts)}){data}")
             continue
         # logger.debug(f"parts: {parts}")
         userid=parts[0]
@@ -55,12 +57,24 @@ async def gaea_run_modules(module, runname, runid, runthread):
         token=parts[4]
         proxy=parts[5]
 
+        PASSWD_REGEX_PATTERN = r'^.*(?=.{8,})(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).*$'
+        EMAIL_REGEX_PATTERN = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$"
+        logger.debug(f"email: {email} re.search(EMAIL_REGEX_PATTERN, email): {re.search(EMAIL_REGEX_PATTERN, email)}")
+        
+        if not (re.search(EMAIL_REGEX_PATTERN, email)):  # email
+            logger.error(f"Invalid email: {email}")
+            continue
+        elif not (re.findall(PASSWD_REGEX_PATTERN, passwd)):  # passwd
+            logger.error(f"Invalid password - {passwd}")
+            continue
+        elif proxy == 'proxy':
+            logger.error(f"Invalid proxy: {proxy}")
+            continue
+
         id+=1
         if int(runid)>0 and id!=int(runid):
             continue
-        logger.debug(f"run task id: {id}")
-
-        logger.debug(f"id: {id} create gaea_run_modules task")
+        logger.debug(f"run task id: {id} create gaea_run_modules task")
         task = asyncio.create_task(gaea_run_module_multiple_times(module=module, delaycount=delay_count, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
         tasks.append(task)
     await asyncio.gather(*tasks)
