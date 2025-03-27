@@ -12,7 +12,7 @@ from loguru import logger
 from questionary import Choice, select
 from termcolor import cprint
 
-from src.functions import gaea_clicker_checkin, gaea_clicker_signin, gaea_clicker_aitrain, gaea_clicker_aicheckin, gaea_clicker_alltask, gaea_clicker_deeptrain
+from src.functions import gaea_clicker_signin, gaea_clicker_aitrain, gaea_clicker_aicheckin, gaea_clicker_alltask, gaea_clicker_deeptrain
 from src.gaea_client import GaeaClient
 from src.task_manager import TaskManager
 from utils.helpers import get_data_for_token
@@ -125,7 +125,6 @@ def main(runname, runid, runthread):
             answer = select(
                 'Choose',
                 choices=[
-                    Choice("🔥 Gaea daily tasks - checkin   (Once a day)",  'gaea_clicker_checkin',   shortcut_key="1"),
                     Choice("🔥 Gaea daily tasks - signin    (Once a day)",  'gaea_clicker_signin',    shortcut_key="2"),
                     Choice("🔥 Gaea daily tasks - aitrain   (Once a day)",  'gaea_clicker_aitrain',   shortcut_key="3"),
                     Choice("🔥 Gaea daily tasks - aicheckin (Once a day)",  'gaea_clicker_aicheckin', shortcut_key="4"),
@@ -139,9 +138,7 @@ def main(runname, runid, runthread):
                 use_arrow_keys=True,
             ).ask()
 
-            if answer == 'gaea_clicker_checkin':
-                asyncio.run(gaea_run_modules(module=gaea_clicker_checkin, runname=runname, runid=runid, runthread=runthread))
-            elif answer == 'gaea_clicker_signin':
+            if answer == 'gaea_clicker_signin':
                 asyncio.run(gaea_run_modules(module=gaea_clicker_signin, runname=runname, runid=runid, runthread=runthread))
             elif answer == 'gaea_clicker_aitrain':
                 choose_emotion()

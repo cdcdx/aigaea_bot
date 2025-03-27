@@ -253,47 +253,6 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker except: {error}")
             raise Exception(error)
 
-    async def checkin_clicker(self) -> None:
-        try:
-            headers = self.getheaders()
-            if len(headers.get('Authorization', None)) < 50:
-                # -------------------------------------------------------------------------- login
-                login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                headers = self.getheaders()
-                set_data_for_token('', self.client.id, self.client.token)
-            # -------------------------------------------------------------------------- checkin
-            url=GAEA_API+'/api/mission/complete-mission'
-            json_data = {
-                "mission_id": "1"
-            }
-
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin url: {url}")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin json_data: {json_data}")
-            response = await self.client.make_request(
-                method='POST', 
-                url=url, 
-                headers=headers,
-                json=json_data
-            )
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin response: {response}")
-
-            code = response.get('code', None)
-            if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin => {response['data']}")
-            else:
-                message = response.get('msg', None)
-                if message is None:
-                    message = f"{response.get('detail', None)}" 
-                if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin => {message}")
-                else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin ERROR: {message}")
-                    raise Exception(message)
-        except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin except: {error}")
-            raise Exception(error)
-
     async def signin_clicker(self) -> None:
         try:
             headers = self.getheaders()
@@ -560,22 +519,6 @@ class GaeaDailyTask:
             raise Exception(error)
 
     @helper
-    async def daily_clicker_checkin(self):
-        try:
-            # -------------------------------------------------------------------------- 1 checkin
-            await self.checkin_clicker()
-
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 checkin delay: {delay} seconds")
-            await asyncio.sleep(delay)
-
-            return "SUCCESS"
-        except Exception as error:
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_checkin except: {error}")
-            return f"ERROR: {error}"
-            raise Exception(error)
-
-    @helper
     async def daily_clicker_signin(self):
         try:
             # -------------------------------------------------------------------------- 2 signin
@@ -645,13 +588,6 @@ class GaeaDailyTask:
     @helper
     async def daily_clicker_alltask(self):
         try:
-            # -------------------------------------------------------------------------- 1 checkin
-            await self.checkin_clicker()
-
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 checkin delay: {delay} seconds")
-            await asyncio.sleep(delay)
-
             # -------------------------------------------------------------------------- 2 signin
             await self.signin_clicker()
 

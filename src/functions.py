@@ -4,11 +4,6 @@ from src.gaea_client import GaeaClient
 from src.gaea_dailytask import GaeaDailyTask
 
 # gaea
-async def gaea_clicker_checkin(id, userid, email, passwd, prikey, token, proxy):
-    if platform.system().lower() == 'windows':
-        os.system("title gaea-checkin")
-    daily_task = GaeaDailyTask(GaeaClient(id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_checkin()
 
 async def gaea_clicker_signin(id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
