@@ -645,19 +645,19 @@ class GaeaDailyTask:
     @helper
     async def daily_clicker_alltask(self):
         try:
-            # -------------------------------------------------------------------------- 1 checkin
-            await self.checkin_clicker()
+            # # -------------------------------------------------------------------------- 1 checkin
+            # await self.checkin_clicker()
 
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 checkin delay: {delay} seconds")
-            await asyncio.sleep(delay)
+            # delay = random.randint(10, 20)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 checkin delay: {delay} seconds")
+            # await asyncio.sleep(delay)
 
-            # -------------------------------------------------------------------------- 2 signin
-            await self.signin_clicker()
+            # # -------------------------------------------------------------------------- 2 signin
+            # await self.signin_clicker()
 
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 signin delay: {delay} seconds")
-            await asyncio.sleep(delay)
+            # delay = random.randint(10, 20)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 signin delay: {delay} seconds")
+            # await asyncio.sleep(delay)
 
             # -------------------------------------------------------------------------- 3 aitrain
             emotion=os.environ.get('CHOOSE_EMOTION', '3')

@@ -125,11 +125,11 @@ def main(runname, runid, runthread):
             answer = select(
                 'Choose',
                 choices=[
-                    Choice("🔥 Gaea daily tasks - checkin   (Once a day)",  'gaea_clicker_checkin',   shortcut_key="1"),
-                    Choice("🔥 Gaea daily tasks - signin    (Once a day)",  'gaea_clicker_signin',    shortcut_key="2"),
+                    # Choice("🔥 Gaea daily tasks - checkin   (Once a day)",  'gaea_clicker_checkin',   shortcut_key="1"),
+                    # Choice("🔥 Gaea daily tasks - signin    (Once a day)",  'gaea_clicker_signin',    shortcut_key="2"),
                     Choice("🔥 Gaea daily tasks - aitrain   (Once a day)",  'gaea_clicker_aitrain',   shortcut_key="3"),
                     Choice("🔥 Gaea daily tasks - aicheckin (Once a day)",  'gaea_clicker_aicheckin', shortcut_key="4"),
-                    Choice("🔥 Gaea daily tasks - alltask   (Once a day)",  'gaea_clicker_alltask',   shortcut_key="5"),
+                    # Choice("🔥 Gaea daily tasks - alltask   (Once a day)",  'gaea_clicker_alltask',   shortcut_key="5"),
                     Choice("🚀 Gaea daily tasks - deeptrain",               'gaea_clicker_deeptrain', shortcut_key="6"),
                     Choice("🚀 Gaea tasks - getpoints", 'gaea_clicker_getpoints', shortcut_key="8"),
                     Choice("🚀 Gaea tasks - getsoul",   'gaea_clicker_getsoul',   shortcut_key="9"),
