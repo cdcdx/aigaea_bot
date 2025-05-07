@@ -24,7 +24,7 @@ def set_envsion(key, value, format=True):
 GAEA_API = os.getenv("GAEA_API", default="https://api.aigaea.net")
 
 # CAPTCHA
-TWO_CAPTCHA_API_URL = os.getenv("TWO_CAPTCHA_API_URL", default="")
+TWO_CAPTCHA_API_URL = os.getenv("TWO_CAPTCHA_API_URL", default="https://api.2captcha.com")
 TWO_CAPTCHA_API_KEY = os.getenv("TWO_CAPTCHA_API_KEY", default="")
 
 # contract

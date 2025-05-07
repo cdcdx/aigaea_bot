@@ -1,1 +1,1 @@
-userid,email,passwd,prikey,token,proxy
+email,passwd,userid,token,prikey,proxy

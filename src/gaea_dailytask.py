@@ -18,7 +18,7 @@ from utils.services import get_captcha_key
 from utils.decorators import helper
 from src.gaea_client import GaeaClient
 from config import get_envsion, set_envsion, GAEA_API, WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_EMOTION
-from utils.helpers import get_data_for_token, set_data_for_token
+from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
 
 
 # ABI
@@ -182,6 +182,85 @@ class GaeaDailyTask:
                     logger.error(f"Max retries reached. Failed to eth.estimate_gas: {str(e)}")
                     return False, {"tx_hash": "estimate_gas", "msg": str(e)}
 
+    # --------------------------------------------------------------------------
+
+    # 60 seconds
+    async def register_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            headers.pop('Authorization', None)
+
+            # -------------------------------------------------------------------------- captcha
+            capcha_key=''
+            total_time = 0
+            timeout = 100
+            retry_flag=False
+            while True:
+                try:
+                    capcha_key = await get_captcha_key(client=self.client)
+                    if str(capcha_key).find("ERROR") > -1:
+                        raise f"{capcha_key}"
+                    break
+                except Exception as error:
+                    logger.error(f"id: {self.client.id} get_captcha_key retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} ")
+                    if "Proxy connection timed out" in f"{error}":
+                        retry_flag=True
+                    elif "Workers could not solve the Captcha" in f"{error}":
+                        retry_flag=True
+                    else:
+                        retry_flag=False
+                    if retry_flag:
+                        total_time += 30
+                        if total_time > timeout:
+                            return f"{error}"
+                        await asyncio.sleep(30)
+                        continue
+                    else:
+                        return f"{error}"
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} get_captcha_key finished")
+
+            logger.debug(f"capcha_key: {capcha_key}")
+            # -------------------------------------------------------------------------- register
+            url=GAEA_API+'/api/auth/register'
+            json_data = {
+                "email": self.client.email,
+                "username": self.client.email.split('@')[0],
+                "password": self.client.passwd,
+                "referral_code": "gaKJUXBVLa08Ad",
+                "recaptcha_token": capcha_key
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker except: {error}")
+            raise Exception(error)
+
     async def login_clicker(self) -> None:
         try:
             headers = self.getheaders()
@@ -199,7 +278,7 @@ class GaeaDailyTask:
                         raise f"{capcha_key}"
                     break
                 except Exception as error:
-                    logger.error(f"id: {self.client.id} get_captcha_key retry:{int(total_time/30)} except ERROR: {str(error).splitlines()[0]} ")
+                    logger.error(f"id: {self.client.id} get_captcha_key retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} ")
                     if "Proxy connection timed out" in f"{error}":
                         retry_flag=True
                     elif "Workers could not solve the Captcha" in f"{error}":
@@ -234,7 +313,10 @@ class GaeaDailyTask:
                 headers=headers,
                 json=json_data
             )
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker response: {response}")
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -246,12 +328,239 @@ class GaeaDailyTask:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
                     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {message}")
+                    return message
                 else:
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker except: {error}")
             raise Exception(error)
+
+    async def session_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- session
+            url=GAEA_API+'/api/auth/session'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker url: {url}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker except: {error}")
+            raise Exception(error)
+
+    async def earninfo_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- earninfo
+            url=GAEA_API+'/api/earn/info'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker except: {error}")
+            raise Exception(error)
+
+    async def godhoodinfo_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- godhoodinfo
+            url=GAEA_API+'/api/godhood/info'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker except: {error}")
+            raise Exception(error)
+
+    async def blindbox_list_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- blindbox_list
+            url=GAEA_API+'/api/godhood/blindbox/list'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                datas = response['data']
+                total = response['total']
+                cdkeys = []
+                if total >= 10:
+                    for i in range(10):
+                        cdkeys.append(datas[i]['cdkey'])
+                else:
+                    cdkeys.append(datas[0]['cdkey'])
+                return {'cdkeys': cdkeys}
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker ERROR: {message}")
+                    raise Exception(message)
+            
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker except: {error}")
+            raise Exception(error)
+
+    async def blindbox_open_clicker(self, cdkeys) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- blindbox_open
+            url=GAEA_API+'/api/godhood/blindbox/open'
+            json_data = {
+                "cdkey": cdkeys
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker except: {error}")
+            raise Exception(error)
+
+    # --------------------------------------------------------------------------
 
     async def checkin_clicker(self) -> None:
         try:
@@ -260,38 +569,43 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                headers = self.getheaders()
                 set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- checkin
             url=GAEA_API+'/api/mission/complete-mission'
             json_data = {
                 "mission_id": "1"
             }
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin url: {url}")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin json_data: {json_data}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker json_data: {json_data}")
             response = await self.client.make_request(
                 method='POST', 
                 url=url, 
                 headers=headers,
                 json=json_data
             )
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin response: {response}")
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin => {response['data']}")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker => {response['data']}")
             else:
                 message = response.get('msg', None)
                 if message is None:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin => {message}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker => {message}")
+                    return message
                 else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin ERROR: {message}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker except: {error}")
             raise Exception(error)
 
     async def signin_clicker(self) -> None:
@@ -301,81 +615,182 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                headers = self.getheaders()
                 set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- signin
             url=GAEA_API+'/api/signin/complete'
             json_data = {
                 "detail": "Positive_Love"
             }
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin url: {url}")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin json_data: {json_data}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker json_data: {json_data}")
             response = await self.client.make_request(
                 method='POST', 
                 url=url, 
                 headers=headers,
                 json=json_data
             )
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin response: {response}")
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin => {response['data']}")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker => {response['data']}")
             else:
                 message = response.get('msg', None)
                 if message is None:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin => {message}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker => {message}")
+                    return message
                 else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin ERROR: {message}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker except: {error}")
+            raise Exception(error)
+
+    async def dailycheckin_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- dailycheckin
+            url=GAEA_API+'/api/reward/daily-complete'
+            weekday = dt.now().weekday() + 1
+            json_data = {
+                "id": weekday
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker => {response['data']}")
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker except: {error}")
+            raise Exception(error)
+
+    async def medalcheckin_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- medalcheckin
+            url=GAEA_API+'/api/medal/complete'
+            json_data = {}
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker => {response['data']}")
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker except: {error}")
             raise Exception(error)
 
     async def aitrain_clicker(self, emotion_detail) -> None:
         try:
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain emotion_detail: {emotion_detail}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker emotion_detail: {emotion_detail}")
 
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                headers = self.getheaders()
                 set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- aitrain
             url=GAEA_API+'/api/ai/complete'
             json_data = {
                 "detail": emotion_detail
             }
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain url: {url}")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain json_data: {json_data}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker json_data: {json_data}")
             response = await self.client.make_request(
                 method='POST', 
                 url=url, 
                 headers=headers,
                 json=json_data
             )
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {response}")
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain => {response['data']}")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker => {response['data']}")
             else:
                 message = response.get('msg', None)
                 if message is None:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain => {message}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker => {message}")
+                    return message
                 else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain ERROR: {message}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker except: {error}")
             raise Exception(error)
 
     async def aicheckin_clicker(self) -> None:
@@ -385,50 +800,55 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                headers = self.getheaders()
                 set_data_for_token('', self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- aicheckin
             url=GAEA_API+'/api/ai/complete-mission'
             json_data = { }
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin url: {url}")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin json_data: {json_data}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker json_data: {json_data}")
             response = await self.client.make_request(
                 method='POST', 
                 url=url, 
                 headers=headers,
                 json=json_data
             )
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin response: {response}")
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin => {response['data']}")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker => {response['data']}")
             else:
                 message = response.get('msg', None)
                 if message is None:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin => {message}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker => {message}")
+                    return message
                 else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin ERROR: {message}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker except: {error}")
             raise Exception(error)
 
     async def deeptrain_clicker(self, emotion) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain ERROR: prikey length must be 64 or 66")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: prikey length must be 64 or 66")
                 raise Exception(f"prikey length must be 64 or 66")
             
             emotion = int(emotion)
             if emotion not in [1,2,3]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain ERROR: Wrong emotion: {emotion}")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: Wrong emotion: {emotion}")
                 raise Exception(f'Wrong emotion: {emotion}')
             
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain emotion: {emotion}")
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker emotion: {emotion}")
             # -------------------------------------------------------------------------- deeptrain
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
@@ -463,7 +883,7 @@ class GaeaDailyTask:
             logger.debug(f"current_emotion: {current_emotion}")
 
             if current_emotion > 0: # 
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain already completed | emotion: {current_emotion}")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker already completed | emotion: {current_emotion}")
                 return 'Deeptrain already completed'
 
             # 当期信息
@@ -556,19 +976,169 @@ class GaeaDailyTask:
             
             logger.success(f"The emotions transaction was send successfully! - transaction: {transaction}")
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker except: {error}")
+            raise Exception(error)
+
+    # --------------------------------------------------------------------------
+
+    @helper
+    async def daily_clicker_register(self):
+        try:
+            if len(self.client.userid) > 5:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} already registered")
+                return "SUCCESS"
+            
+            headers = self.getheaders()
+            # -------------------------------------------------------------------------- register
+            clicker_response = await self.register_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            self.client.userid = clicker_response.get('user_info', None).get('uid', None)
+            set_data_for_userid('', self.client.id, self.client.userid)
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            delay = random.randint(100, 200)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 0 register delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_register except: {error}")
+            return f"ERROR: {error}"
+            raise Exception(error)
+
+    @helper
+    async def daily_clicker_login(self):
+        try:
+            if len(self.client.token) > 5:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} already login")
+                return "SUCCESS"
+            
+            headers = self.getheaders()
+            # -------------------------------------------------------------------------- login
+            clicker_response = await self.login_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            self.client.token = clicker_response.get('token', None)
+            set_data_for_token('', self.client.id, self.client.token)
+            self.client.userid = clicker_response.get('user_info', None).get('uid', None)
+            set_data_for_userid('', self.client.id, self.client.userid)
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_login except: {error}")
+            return f"ERROR: {error}"
+            raise Exception(error)
+
+    @helper
+    async def daily_clicker_session(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_session except: {error}")
+            return f"ERROR: {error}"
+            raise Exception(error)
+
+    @helper
+    async def daily_clicker_earninfo(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- earninfo
+            clicker_response = await self.earninfo_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_earninfo except: {error}")
+            return f"ERROR: {error}"
+            raise Exception(error)
+
+    @helper
+    async def daily_clicker_godhoodinfo(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- godhoodinfo
+            clicker_response = await self.godhoodinfo_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response['mood']}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodinfo except: {error}")
+            return f"ERROR: {error}"
+            raise Exception(error)
+
+    @helper
+    async def daily_clicker_blindbox(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- blindbox_list
+            clicker_response = await self.blindbox_list_clicker()
+            cdkeys = clicker_response.get("cdkeys", [])
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            
+            # -------------------------------------------------------------------------- godhoodinfo
+            clicker_response = await self.godhoodinfo_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            if clicker_response['mood'] is None:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Please mint GODHOOD ID first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            # # -------------------------------------------------------------------------- blindbox_open
+            clicker_response = await self.blindbox_open_clicker(cdkeys)
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_blindbox except: {error}")
+            return f"ERROR: {error}"
             raise Exception(error)
 
     @helper
     async def daily_clicker_checkin(self):
         try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
             # -------------------------------------------------------------------------- 1 checkin
-            await self.checkin_clicker()
-
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 checkin delay: {delay} seconds")
-            await asyncio.sleep(delay)
-
+            clicker_response = await self.checkin_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_checkin except: {error}")
@@ -578,13 +1148,16 @@ class GaeaDailyTask:
     @helper
     async def daily_clicker_signin(self):
         try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
             # -------------------------------------------------------------------------- 2 signin
-            await self.signin_clicker()
-
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 signin delay: {delay} seconds")
-            await asyncio.sleep(delay)
-
+            clicker_response = await self.signin_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_signin except: {error}")
@@ -592,17 +1165,69 @@ class GaeaDailyTask:
             raise Exception(error)
 
     @helper
+    async def daily_clicker_dailycheckin(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- 1 dailycheckin
+            clicker_response = await self.dailycheckin_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_dailycheckin except: {error}")
+            return f"ERROR: {error}"
+            raise Exception(error)
+
+    @helper
+    async def daily_clicker_medalcheckin(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- 2 medalcheckin
+            clicker_response = await self.medalcheckin_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_medalcheckin except: {error}")
+            return f"ERROR: {error}"
+            raise Exception(error)
+
+    @helper
     async def daily_clicker_aitrain(self):
         try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- godhoodinfo
+            clicker_response = await self.godhoodinfo_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            is_godhood_id = "0"
+            if clicker_response['mood']:
+                is_godhood_id = "1"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- 3 aitrain
             emotion=os.environ.get('CHOOSE_EMOTION', '3')
-            emotion_detail=emotion+'_1_1'
-            await self.aitrain_clicker(emotion_detail)
-
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 3 aitrain delay: {delay} seconds")
-            await asyncio.sleep(delay)
-
+            emotion_detail=emotion+'_1_'+is_godhood_id
+            clicker_response = await self.aitrain_clicker(emotion_detail)
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain except: {error}")
@@ -612,13 +1237,16 @@ class GaeaDailyTask:
     @helper
     async def daily_clicker_aicheckin(self):
         try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
             # -------------------------------------------------------------------------- 4 aicheckin
-            await self.aicheckin_clicker()
-
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 aicheckin delay: {delay} seconds")
-            await asyncio.sleep(delay)
-
+            clicker_response = await self.aicheckin_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aicheckin except: {error}")
@@ -628,13 +1256,13 @@ class GaeaDailyTask:
     @helper
     async def daily_clicker_deeptrain(self):
         try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
             # -------------------------------------------------------------------------- 5 deeptrain
             emotion=os.environ.get('CHOOSE_EMOTION', '3')
             await self.deeptrain_clicker(emotion)
-
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 deeptrain delay: {delay} seconds")
-            await asyncio.sleep(delay)
 
             return "SUCCESS"
         except Exception as error:
@@ -645,34 +1273,70 @@ class GaeaDailyTask:
     @helper
     async def daily_clicker_alltask(self):
         try:
-            # -------------------------------------------------------------------------- 1 checkin
-            await self.checkin_clicker()
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # # -------------------------------------------------------------------------- 1 checkin
+            # await self.checkin_clicker()
+
+            # delay = random.randint(10, 20)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 checkin_clicker delay: {delay} seconds")
+            # await asyncio.sleep(delay)
+
+            # # -------------------------------------------------------------------------- 2 signin
+            # await self.signin_clicker()
+
+            # delay = random.randint(10, 20)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 signin_clicker delay: {delay} seconds")
+            # await asyncio.sleep(delay)
+
+            # -------------------------------------------------------------------------- 1 dailycheckin
+            await self.dailycheckin_clicker()
 
             delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 checkin delay: {delay} seconds")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 dailycheckin_clicker delay: {delay} seconds")
             await asyncio.sleep(delay)
 
-            # -------------------------------------------------------------------------- 2 signin
-            await self.signin_clicker()
+            # -------------------------------------------------------------------------- 2 medalcheckin
+            await self.medalcheckin_clicker()
 
             delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 signin delay: {delay} seconds")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 dailycheckin_clicker delay: {delay} seconds")
             await asyncio.sleep(delay)
 
+            # -------------------------------------------------------------------------- godhoodinfo
+            clicker_response = await self.godhoodinfo_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            is_godhood_id = "0"
+            if clicker_response['mood']:
+                is_godhood_id = "1"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- 3 aitrain
             emotion=os.environ.get('CHOOSE_EMOTION', '3')
-            emotion_detail=emotion+'_1_1'
+            emotion_detail=emotion+'_1_'+is_godhood_id
             await self.aitrain_clicker(emotion_detail)
 
             delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 3 aitrain delay: {delay} seconds")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 3 aitrain_clicker delay: {delay} seconds")
             await asyncio.sleep(delay)
 
-            # -------------------------------------------------------------------------- 4 aicheckin
+            # -------------------------------------------------------------------------- 4 deeptrain
+            await self.deeptrain_clicker(emotion)
+
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deeptrain_clicker delay: {delay} seconds")
+            await asyncio.sleep(delay)
+
+            # -------------------------------------------------------------------------- 5 aicheckin
             await self.aicheckin_clicker()
 
             delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 aicheckin delay: {delay} seconds")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 aicheckin_clicker delay: {delay} seconds")
             await asyncio.sleep(delay)
 
             # --------------------------------------------------------------------------

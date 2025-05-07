@@ -3,11 +3,14 @@ import hashlib
 import random
 import ssl
 import asyncio
+import socket
 import time
 from loguru import logger
 from aiohttp import ClientSession
 from aiohttp_socks import ProxyConnector
 from jose import jwt
+
+from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
 
 class GaeaClient:
     def __init__(self, id: str, userid: str, email: str, passwd:str, prikey: str, token: str, proxy: str) -> None:
@@ -29,6 +32,7 @@ class GaeaClient:
             expire = payload.get("expire")
             if expire is None or expire <= current_timestamp:
                 self.token = ''
+                set_data_for_token('', self.id, self.token)
             else:
                 self.token = token
         else:
@@ -49,17 +53,13 @@ class GaeaClient:
         return (f'Mozilla/5.0 (Linux; Android 14; sdk_gphone64_arm64 Build/UE1A.230829.036.A2; wv) AppleWebKit/{random_version} (KHTML, like Gecko) Version/4.0 Chrome/121.0.0.0 Mobile Safari/{random_version}')
 
     async def make_request(self, method:str = 'GET', url:str = None, headers:dict = None, params: dict = None, data:str = None, json:dict = None, module_name: str = 'Request'):
-
         errors = None
-
         total_time = 0
         timeout = 100
         while True:
             try:
-                logger.debug(f"id: {self.id} make_request retry:{int(total_time/30)} url: {url}")
-                async with self.session.request(
-                        method=method, url=url, headers=headers, data=data, params=params, json=json, ssl=False
-                ) as response:
+                logger.debug(f"id: {self.id} make_request retry: {int(total_time/30)} url: {url}")
+                async with self.session.request( method=method, url=url, headers=headers, data=data, params=params, json=json, ssl=False ) as response:
                     logger.debug(f"id: {self.id} make_request response.status: {response.status}")
                     if response.status in [200, 201]:
                         data = await response.json()
@@ -81,8 +81,16 @@ class GaeaClient:
                         logger.debug(f"id: {self.id} make_request data: {data}")
                         return data
                     raise Exception(f"Bad request to {self.__class__.__name__}({method}) status: {response.status} API: {str(await response.text()).splitlines()[0]}")
+            except (socket.gaierror, asyncio.TimeoutError) as error:  # 增加对DNS解析失败和超时的处理
+                logger.error(f"id: {self.id} make_request retry: {int(total_time/30)} DNS or Timeout ERROR: {str(error).splitlines()[0]} json: {json}")
+                total_time += 30
+                if total_time > timeout:
+                    return f"ERROR: {error}"
+                    raise Exception(error)
+                await asyncio.sleep(30)
+                continue
             except Exception as error:
-                logger.error(f"id: {self.id} make_request retry:{int(total_time/30)} except ERROR: {str(error).splitlines()[0]} json: {json}")
+                logger.error(f"id: {self.id} make_request retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} json: {json}")
                 if "Proxy connection timed out" in f"{error}":
                     retry_flag=True
                 elif "General SOCKS server failure" in f"{error}":

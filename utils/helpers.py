@@ -38,13 +38,33 @@ def set_data_for_token(name,id,token):
     if len(parts) < 4:
         raise ValueError(f"Line {id} is out of range.")
     # logger.debug(f"parts: {parts}")
-    userid=parts[0]
-    email=parts[1]
-    passwd=parts[2]
-    prikey=parts[3]
-    # token=parts[4]
-    proxy=parts[5]
-    datas[id - 1] = f"{userid},{email},{passwd},{prikey},{token},{proxy}"
+    email, passwd, userid, token1, prikey, proxy = map(str.strip, parts)
+
+    datas[id - 1] = f"{email.ljust(23)},{passwd},{userid},{token},{prikey},{proxy}"
+
+    with open(file, 'w') as f:
+        for line in datas:
+            f.write(line + '\n')
+
+def set_data_for_userid(name,id,userid):
+    # print("name: ",name)
+    if name == '':
+        file = f'data/token.txt'
+    else:
+        file = f'data/token-{name}.txt'
+    datas = get_file_content(file)
+    if id < 1 or id > len(datas):
+        raise ValueError(f"Line {id} is out of range.")
+
+    data=datas[id - 1]
+
+    parts = data.split(',')
+    if len(parts) < 4:
+        raise ValueError(f"Line {id} is out of range.")
+    # logger.debug(f"parts: {parts}")
+    email, passwd, userid1, token, prikey, proxy = map(str.strip, parts)
+
+    datas[id - 1] = f"{email.ljust(23)},{passwd},{userid},{token},{prikey},{proxy}"
 
     with open(file, 'w') as f:
         for line in datas:

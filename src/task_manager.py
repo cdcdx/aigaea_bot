@@ -3,7 +3,9 @@ import random
 import time
 from loguru import logger
 from utils.helpers import get_data_for_token
-from src.functions import gaea_clicker_checkin, gaea_clicker_signin, gaea_clicker_aitrain, gaea_clicker_aicheckin, gaea_clicker_deeptrain, gaea_clicker_alltask
+from src.functions import gaea_clicker_checkin, gaea_clicker_signin
+from src.functions import gaea_clicker_dailycheckin, gaea_clicker_medalcheckin
+from src.functions import gaea_clicker_aitrain, gaea_clicker_aicheckin, gaea_clicker_deeptrain, gaea_clicker_alltask
 
 class TaskManager:
     def __init__(self, runname) -> None:
@@ -27,13 +29,14 @@ class TaskManager:
             if len(parts) < 4:
                 continue
             # logger.debug(f"parts: {parts}")
-            userid=parts[0]
-            email=parts[1]
-            passwd=parts[2]
-            prikey=parts[3]
-            token=parts[4]
-            proxy=parts[5]
+            email, passwd, userid, token, prikey, proxy = map(str.strip, parts)
             logger.info(f"userid: {userid} email: {email} proxy: {proxy}")
+            # email=parts[0].strip()
+            # passwd=parts[1].strip()
+            # userid=parts[2].strip()
+            # token=parts[3].strip()
+            # prikey=parts[4].strip()
+            # proxy=parts[5].strip()
 
             result = await gaea_clicker_checkin(id, userid, email, passwd, prikey, token, proxy)
             if str(result).find("ERROR") > -1 and str(result).find("SUCCESS") == -1:
@@ -44,7 +47,7 @@ class TaskManager:
 
             logger.info(f"thread: {thread} | Completed account usage - id: {id} userid: {userid} email: {email}")
 
-    async def gaea_clicker_signin(self, thread: int, runid: int, module_name: str) -> None:
+    async def launch_clicker_signin(self, thread: int, runid: int, module_name: str) -> None:
         while True:
             async with self.lock:
                 if not self.datas:
@@ -60,12 +63,7 @@ class TaskManager:
             if len(parts) < 4:
                 continue
             # logger.debug(f"parts: {parts}")
-            userid=parts[0]
-            email=parts[1]
-            passwd=parts[2]
-            prikey=parts[3]
-            token=parts[4]
-            proxy=parts[5]
+            email, passwd, userid, token, prikey, proxy = map(str.strip, parts)
             logger.info(f"userid: {userid} email: {email} proxy: {proxy}")
 
             result = await gaea_clicker_signin(id, userid, email, passwd, prikey, token, proxy)
@@ -74,6 +72,62 @@ class TaskManager:
                 break
             else:
                 logger.success(f"thread: {thread} id: {id} userid: {userid} email: {email} gaea_clicker_signin result: {result}")
+
+            logger.info(f"thread: {thread} | Completed account usage - id: {id} userid: {userid} email: {email}")
+
+    async def launch_clicker_dailycheckin(self, thread: int, runid: int, module_name: str) -> None:
+        while True:
+            async with self.lock:
+                if not self.datas:
+                    return 'nokeys'
+                else:
+                    data = self.datas.pop(0)
+                    id = self.count-len(self.datas)
+            # Skip if runid is incorrect
+            if runid > 0 and id != runid:
+                continue
+
+            parts = data.split(',')
+            if len(parts) < 4:
+                continue
+            # logger.debug(f"parts: {parts}")
+            email, passwd, userid, token, prikey, proxy = map(str.strip, parts)
+            logger.info(f"userid: {userid} email: {email} proxy: {proxy}")
+
+            result = await gaea_clicker_dailycheckin(id, userid, email, passwd, prikey, token, proxy)
+            if str(result).find("ERROR") > -1 and str(result).find("SUCCESS") == -1:
+                logger.error(f"thread: {thread} id: {id} userid: {userid} email: {email} gaea_clicker_dailycheckin result: {result}")
+                break
+            else:
+                logger.success(f"thread: {thread} id: {id} userid: {userid} email: {email} gaea_clicker_dailycheckin result: {result}")
+
+            logger.info(f"thread: {thread} | Completed account usage - id: {id} userid: {userid} email: {email}")
+
+    async def launch_clicker_medalcheckin(self, thread: int, runid: int, module_name: str) -> None:
+        while True:
+            async with self.lock:
+                if not self.datas:
+                    return 'nokeys'
+                else:
+                    data = self.datas.pop(0)
+                    id = self.count-len(self.datas)
+            # Skip if runid is incorrect
+            if runid > 0 and id != runid:
+                continue
+
+            parts = data.split(',')
+            if len(parts) < 4:
+                continue
+            # logger.debug(f"parts: {parts}")
+            email, passwd, userid, token, prikey, proxy = map(str.strip, parts)
+            logger.info(f"userid: {userid} email: {email} proxy: {proxy}")
+
+            result = await gaea_clicker_medalcheckin(id, userid, email, passwd, prikey, token, proxy)
+            if str(result).find("ERROR") > -1 and str(result).find("SUCCESS") == -1:
+                logger.error(f"thread: {thread} id: {id} userid: {userid} email: {email} gaea_clicker_medalcheckin result: {result}")
+                break
+            else:
+                logger.success(f"thread: {thread} id: {id} userid: {userid} email: {email} gaea_clicker_medalcheckin result: {result}")
 
             logger.info(f"thread: {thread} | Completed account usage - id: {id} userid: {userid} email: {email}")
 
@@ -93,12 +147,7 @@ class TaskManager:
             if len(parts) < 4:
                 continue
             # logger.debug(f"parts: {parts}")
-            userid=parts[0]
-            email=parts[1]
-            passwd=parts[2]
-            prikey=parts[3]
-            token=parts[4]
-            proxy=parts[5]
+            email, passwd, userid, token, prikey, proxy = map(str.strip, parts)
             logger.info(f"userid: {userid} email: {email} proxy: {proxy}")
 
             result = await gaea_clicker_aitrain(id, userid, email, passwd, prikey, token, proxy)
@@ -126,12 +175,7 @@ class TaskManager:
             if len(parts) < 4:
                 continue
             # logger.debug(f"parts: {parts}")
-            userid=parts[0]
-            email=parts[1]
-            passwd=parts[2]
-            prikey=parts[3]
-            token=parts[4]
-            proxy=parts[5]
+            email, passwd, userid, token, prikey, proxy = map(str.strip, parts)
             logger.info(f"userid: {userid} email: {email} proxy: {proxy}")
 
             result = await gaea_clicker_aicheckin(id, userid, email, passwd, prikey, token, proxy)
@@ -159,12 +203,7 @@ class TaskManager:
             if len(parts) < 4:
                 continue
             # logger.debug(f"parts: {parts}")
-            userid=parts[0]
-            email=parts[1]
-            passwd=parts[2]
-            prikey=parts[3]
-            token=parts[4]
-            proxy=parts[5]
+            email, passwd, userid, token, prikey, proxy = map(str.strip, parts)
             logger.info(f"userid: {userid} email: {email} proxy: {proxy}")
 
             result = await gaea_clicker_deeptrain(id, userid, email, passwd, prikey, token, proxy)
@@ -192,12 +231,7 @@ class TaskManager:
             if len(parts) < 4:
                 continue
             # logger.debug(f"parts: {parts}")
-            userid=parts[0]
-            email=parts[1]
-            passwd=parts[2]
-            prikey=parts[3]
-            token=parts[4]
-            proxy=parts[5]
+            email, passwd, userid, token, prikey, proxy = map(str.strip, parts)
             logger.info(f"userid: {userid} email: {email} proxy: {proxy}")
 
             result = await gaea_clicker_alltask(id, userid, email, passwd, prikey, token, proxy)
