@@ -23,7 +23,7 @@ from src.functions import (
 from src.gaea_client import GaeaClient
 from src.task_manager import TaskManager
 from utils.helpers import get_data_for_token
-from utils.services import resolve_domain
+from utils.services import resolve_domain, get_web3_config
 from config import set_envsion, GAEA_API
 
 MODULE_MAPPING = {
@@ -42,7 +42,9 @@ MODULE_MAPPING = {
     'gaea_clicker_alltask': gaea_clicker_alltask,
     'gaea_clicker_deeptrain': gaea_clicker_deeptrain,
 }
-
+# 预编译正则表达式
+PASSWD_REGEX_PATTERN = r'^.*(?=.{8,})(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).*$'
+EMAIL_REGEX_PATTERN = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$"
 # ----------------------------------------------------------------------------------------------------------
 
 def is_id_valid(id, runeq, rungt, runlt):
@@ -59,8 +61,12 @@ def is_id_valid(id, runeq, rungt, runlt):
         match |= True
     return match
 
+async def limit_concurrency(semaphore, func, **kwargs):
+    async with semaphore:
+        return await func(**kwargs)
+
 async def gaea_run_module_multiple_times(module, count, id, email, passwd, userid, token, prikey, proxy):
-    delay = 5*(count-1) + random.randint(1, 10)
+    delay = random.randint(5, 15)
     logger.debug(f"id: {id} userid: {userid} email: {email} account delay: {delay} seconds")
     await asyncio.sleep(delay)
 
@@ -71,13 +77,17 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
     datas = get_data_for_token(runname)
     logger.info(f"runeq: {runeq} rungt: {rungt} runlt: {runlt}")
 
-    id=0
+    if runthread<=0:
+        runthread = sum(1 for id, _ in enumerate(datas, start=1) if is_id_valid(id, runeq, rungt, runlt))
+        logger.debug(f"runthread: {runthread}")
+    runthread = min(runthread, 20)
+    logger.info(f"runthread: {runthread}")
+    semaphore = asyncio.Semaphore(runthread)
+
     count=0
     tasks = []
-    for data in datas:
-        id+=1
-        if not is_id_valid(id, runeq, rungt, runlt):
-            # logger.debug(f"Invalid id: {id}")
+    for data_id, data in enumerate(datas, start=1):
+        if not is_id_valid(data_id, runeq, rungt, runlt):
             continue
 
         parts = data.split(',')
@@ -88,10 +98,6 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
         email, passwd, userid, token, prikey, proxy = map(str.strip, parts)
         # logger.debug(f"parts: {parts}")
 
-        PASSWD_REGEX_PATTERN = r'^.*(?=.{8,})(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).*$'
-        EMAIL_REGEX_PATTERN = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$"
-        # logger.debug(f"email: {email} re.search(EMAIL_REGEX_PATTERN, email): {re.search(EMAIL_REGEX_PATTERN, email)}")
-        
         if not (re.search(EMAIL_REGEX_PATTERN, email)):  # email
             logger.error(f"Invalid email: {email}")
             continue
@@ -103,12 +109,14 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
             continue
 
         count+=1
-        logger.debug(f"run task id: {id} create gaea_run_modules task")
+        logger.debug(f"run task_id: {data_id} create gaea_run_modules task")
         tasks.append(asyncio.create_task(
-            gaea_run_module_multiple_times(
+            limit_concurrency(
+                semaphore,
+                gaea_run_module_multiple_times,
                 module=module,
                 count=count,
-                id=id,
+                id=data_id,
                 email=email,
                 passwd=passwd,
                 userid=userid,
@@ -117,7 +125,12 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
                 proxy=proxy
             )
         ))
-    await asyncio.gather(*tasks)
+    try:
+        await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        logger.warning("Tasks were cancelled.")
+    except Exception as e:
+        logger.error(f"Error occurred while running tasks: {e}")
 
 def run_module(module, runname, runeq, rungt, runlt, runthread):
     if module in [gaea_clicker_aitrain, gaea_clicker_alltask, gaea_clicker_deeptrain]:
@@ -212,11 +225,15 @@ async def gaea_daily_task_modules(module, runname, runeq, runthread):
 
 def daily_task_module():
     logger.info("Execute alltask scheduled task...")
-    asyncio.run(gaea_daily_task_modules(module=gaea_clicker_aitrain, runname=run_name, runeq=runeq, runthread=run_thread))
+    asyncio.run(gaea_daily_task_modules(module=gaea_clicker_aitrain, runname=run_name, runeq=run_eq, runthread=run_thread))
 
-
-def main_task(hour):
-    task_time = f"{str(hour).zfill(2)}:{str(random.randint(0, 59)).zfill(2)}"
+def main_task():
+    # 获取当前时间
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    logger.info(f"current_time: {current_time}")
+    # 设置定时任务
+    task_time = f"{str(run_run).zfill(2)}:{str(random.randint(0, 59)).zfill(2)}"
+    logger.info(f"The scheduled task will start at {task_time} every day ...")
     schedule.every().day.at(task_time).do(daily_task_module)
 
 # ----------------------------------------------------------------------------------------------------------
@@ -248,16 +265,18 @@ if __name__ == '__main__':
     logger.add(sys.stdout, level=log_level)
     # logger.add("data/logs/logging.log", rotation="100 MB", level=log_level)
 
+    # 解析域名
     ip_addresses = asyncio.run(resolve_domain(GAEA_API))
     logger.debug(f"resolve_domain {GAEA_API} => ip: {ip_addresses}")
+    # 获取远程配置
+    asyncio.run(get_web3_config())
 
     if run_auto:
         emotion = choose_emotion()
         os.environ['CHOOSE_EMOTION'] = emotion
 
         if 0 <= run_run <= 23:
-            logger.info(f"The scheduled task will start at {run_run} every day ...")
-            main_task(run_run)
+            main_task()
         else:
             logger.error(f"Invalid parameter, run: {run_run} must be between 0 and 23.")
             sys.exit(1)

@@ -14,97 +14,13 @@ from loguru import logger
 from web3 import Web3
 from eth_account.messages import encode_defunct
 
-from utils.services import get_captcha_key
-from utils.decorators import helper
 from src.gaea_client import GaeaClient
-from config import get_envsion, set_envsion, GAEA_API, WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_EMOTION
+from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2
+from utils.decorators import helper
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
-
-
-# ABI
-contract_abi_usdc = [
-    {
-        "inputs": [
-            { "internalType": "address", "name": "account", "type": "address" }
-        ],
-        "name": "balanceOf",
-        "outputs": [
-            { "internalType": "uint256", "name": "", "type": "uint256" }
-        ], 
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            { "internalType": "address", "name": "owner", "type": "address" },
-            { "internalType": "address", "name": "spender", "type": "address" }
-        ],
-        "name": "allowance",
-        "outputs": [
-            { "internalType": "uint256", "name": "", "type": "uint256" }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            { "internalType": "address", "name": "spender", "type": "address" }, 
-            { "internalType": "uint256", "name": "amount", "type": "uint256" }
-        ],
-        "name": "approve",
-        "outputs": [
-            { "internalType": "bool", "name": "", "type": "bool" }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-]
-contract_abi_emotion = [
-    {
-        "inputs": [
-            { "internalType": "uint8", "name": "_num", "type": "uint8" }
-        ],
-        "name": "emotions",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "Issue",
-        "outputs": [
-            { "internalType": "uint256", "name": "", "type": "uint256" }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            { "internalType": "uint256", "name": "", "type": "uint256" }
-        ],
-        "name": "IssueInformation",
-        "outputs": [
-            { "internalType": "uint256", "name": "duration", "type": "uint256" },
-            { "internalType": "uint256", "name": "price", "type": "uint256" },
-            { "internalType": "uint256", "name": "putmoney", "type": "uint256" }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            { "internalType": "uint256", "name": "", "type": "uint256" },
-            { "internalType": "address", "name": "", "type": "address" }
-        ],
-        "name": "IssueAddressEmotions",
-        "outputs": [
-            { "internalType": "uint8", "name": "", "type": "uint8" }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-]
-
+from utils.services import get_captcha_key
+from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP
+from config import WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_EMOTION, CONTRACT_REWARD
 
 class GaeaDailyTask:
     def __init__(self, client: GaeaClient) -> None:
@@ -129,6 +45,16 @@ class GaeaDailyTask:
 
     # Send transaction (retry 5 times, 2 seconds each)
     def send_transaction_with_retry(self, web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas, max_retries=1, retry_interval=2):
+        """
+        发送交易
+        :param web3_connection: Web3 连接对象
+        :param transaction: 交易对象
+        :param max_fee_per_gas: 最大每 gas 费用
+        :param priority_fee_per_gas: 优先每 gas 费用
+        :param max_retries: 最大重试次数
+        :param retry_interval: 重试间隔时间
+        :return: 交易结果和交易哈希
+        """
         attempt = 0
         while attempt < max_retries:
             try:
@@ -221,7 +147,7 @@ class GaeaDailyTask:
 
             logger.debug(f"capcha_key: {capcha_key}")
             # -------------------------------------------------------------------------- register
-            url=GAEA_API+'/api/auth/register'
+            url = GAEA_API.rstrip('/')+'/api/auth/register'
             json_data = {
                 "email": self.client.email,
                 "username": self.client.email.split('@')[0],
@@ -259,7 +185,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker except: {error}")
-            raise Exception(error)
 
     async def login_clicker(self) -> None:
         try:
@@ -297,7 +222,7 @@ class GaeaDailyTask:
 
             logger.debug(f"capcha_key: {capcha_key}")
             # -------------------------------------------------------------------------- login
-            url=GAEA_API+'/api/auth/login'
+            url = GAEA_API.rstrip('/')+'/api/auth/login'
             json_data = {
                 "username": self.client.email,
                 "password": self.client.passwd,
@@ -334,7 +259,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker except: {error}")
-            raise Exception(error)
 
     async def session_clicker(self) -> None:
         try:
@@ -347,7 +271,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- session
-            url=GAEA_API+'/api/auth/session'
+            url = GAEA_API.rstrip('/')+'/api/auth/session'
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker url: {url}")
             response = await self.client.make_request(
@@ -376,7 +300,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker except: {error}")
-            raise Exception(error)
 
     async def earninfo_clicker(self) -> None:
         try:
@@ -389,7 +312,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- earninfo
-            url=GAEA_API+'/api/earn/info'
+            url = GAEA_API.rstrip('/')+'/api/earn/info'
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker url: {url}")
             response = await self.client.make_request(
@@ -418,7 +341,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker except: {error}")
-            raise Exception(error)
 
     async def godhoodinfo_clicker(self) -> None:
         try:
@@ -431,7 +353,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- godhoodinfo
-            url=GAEA_API+'/api/godhood/info'
+            url = GAEA_API.rstrip('/')+'/api/godhood/info'
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker url: {url}")
             response = await self.client.make_request(
@@ -460,7 +382,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker except: {error}")
-            raise Exception(error)
 
     async def blindbox_list_clicker(self) -> None:
         try:
@@ -473,7 +394,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- blindbox_list
-            url=GAEA_API+'/api/godhood/blindbox/list'
+            url = GAEA_API.rstrip('/')+'/api/godhood/blindbox/list'
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker url: {url}")
             response = await self.client.make_request(
@@ -511,7 +432,6 @@ class GaeaDailyTask:
             
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker except: {error}")
-            raise Exception(error)
 
     async def blindbox_open_clicker(self, cdkeys) -> None:
         try:
@@ -524,7 +444,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- blindbox_open
-            url=GAEA_API+'/api/godhood/blindbox/open'
+            url = GAEA_API.rstrip('/')+'/api/godhood/blindbox/open'
             json_data = {
                 "cdkey": cdkeys
             }
@@ -558,7 +478,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker except: {error}")
-            raise Exception(error)
 
     # --------------------------------------------------------------------------
 
@@ -573,7 +492,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- checkin
-            url=GAEA_API+'/api/mission/complete-mission'
+            url = GAEA_API.rstrip('/')+'/api/mission/complete-mission'
             json_data = {
                 "mission_id": "1"
             }
@@ -606,7 +525,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker except: {error}")
-            raise Exception(error)
 
     async def signin_clicker(self) -> None:
         try:
@@ -619,7 +537,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- signin
-            url=GAEA_API+'/api/signin/complete'
+            url = GAEA_API.rstrip('/')+'/api/signin/complete'
             json_data = {
                 "detail": "Positive_Love"
             }
@@ -652,7 +570,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker except: {error}")
-            raise Exception(error)
 
     async def dailycheckin_clicker(self) -> None:
         try:
@@ -665,7 +582,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- dailycheckin
-            url=GAEA_API+'/api/reward/daily-complete'
+            url = GAEA_API.rstrip('/')+'/api/reward/daily-complete'
             weekday = dt.now().weekday() + 1
             json_data = {
                 "id": weekday
@@ -699,7 +616,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker except: {error}")
-            raise Exception(error)
 
     async def medalcheckin_clicker(self) -> None:
         try:
@@ -712,7 +628,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- medalcheckin
-            url=GAEA_API+'/api/medal/complete'
+            url = GAEA_API.rstrip('/')+'/api/medal/complete'
             json_data = {}
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker url: {url}")
@@ -743,7 +659,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker except: {error}")
-            raise Exception(error)
 
     async def aitrain_clicker(self, emotion_detail) -> None:
         try:
@@ -758,7 +673,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- aitrain
-            url=GAEA_API+'/api/ai/complete'
+            url = GAEA_API.rstrip('/')+'/api/ai/complete'
             json_data = {
                 "detail": emotion_detail
             }
@@ -791,7 +706,6 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker except: {error}")
-            raise Exception(error)
 
     async def aicheckin_clicker(self) -> None:
         try:
@@ -804,7 +718,7 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid('', self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- aicheckin
-            url=GAEA_API+'/api/ai/complete-mission'
+            url = GAEA_API.rstrip('/')+'/api/ai/complete-mission'
             json_data = { }
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker url: {url}")
@@ -835,20 +749,19 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker except: {error}")
-            raise Exception(error)
 
-    async def deeptrain_clicker(self, emotion) -> None:
+    async def deeptrain_clicker(self, emotion_int) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: prikey length must be 64 or 66")
                 raise Exception(f"prikey length must be 64 or 66")
             
-            emotion = int(emotion)
-            if emotion not in [1,2,3]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: Wrong emotion: {emotion}")
-                raise Exception(f'Wrong emotion: {emotion}')
+            emotion_int = int(emotion_int)
+            if emotion_int not in [1,2,3]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: Wrong emotion_int: {emotion_int}")
+                raise Exception(f'Wrong emotion_int: {emotion_int}')
             
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker emotion: {emotion}")
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker emotion_int: {emotion_int}")
             # -------------------------------------------------------------------------- deeptrain
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
@@ -857,6 +770,9 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to eth.is_connected.")
                 raise Exception("Failed to eth.is_connected.")
             
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
             # 钱包地址
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
@@ -866,7 +782,10 @@ class GaeaDailyTask:
             usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
             # 情绪合约地址
             emotion_address = Web3.to_checksum_address(CONTRACT_EMOTION)
-            emotion_contract = web3_obj.eth.contract(address=emotion_address, abi=contract_abi_emotion)
+            if ERA3_ONLINE_STAMP > current_timestamp:
+                emotion_contract = web3_obj.eth.contract(address=emotion_address, abi=contract_abi_emotion)
+            else:
+                emotion_contract = web3_obj.eth.contract(address=emotion_address, abi=contract_abi_emotion2)
         
             # 账户余额
             sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
@@ -956,16 +875,28 @@ class GaeaDailyTask:
             logger.info(f"max_fee_per_gas: {max_fee_per_gas} wei")
 
             # 构建交易 - 情绪打卡
-            transaction = emotion_contract.functions.emotions( emotion ).build_transaction(
-                {
-                    "chainId": WEB3_CHAINID,
-                    "from": sender_address,
-                    "gas": 20000000,  # 最大 Gas 用量
-                    "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                    "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                    "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                }
-            )
+            if ERA3_ONLINE_STAMP > current_timestamp:
+                transaction = emotion_contract.functions.emotions( emotion_int ).build_transaction(
+                    {
+                        "chainId": WEB3_CHAINID,
+                        "from": sender_address,
+                        "gas": 20000000,  # 最大 Gas 用量
+                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                    }
+                )
+            else:
+                transaction = emotion_contract.functions.emotions( sender_address, emotion_int ).build_transaction(
+                    {
+                        "chainId": WEB3_CHAINID,
+                        "from": sender_address,
+                        "gas": 20000000,  # 最大 Gas 用量
+                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                    }
+                )
             logger.debug(f"emotions transaction: {transaction}")
 
             # 发送交易
@@ -977,7 +908,6 @@ class GaeaDailyTask:
             logger.success(f"The emotions transaction was send successfully! - transaction: {transaction}")
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker except: {error}")
-            raise Exception(error)
 
     # --------------------------------------------------------------------------
 
@@ -1005,7 +935,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_register except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_login(self):
@@ -1030,7 +959,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_login except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_session(self):
@@ -1049,7 +977,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_session except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_earninfo(self):
@@ -1068,7 +995,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_earninfo except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_godhoodinfo(self):
@@ -1087,7 +1013,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodinfo except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_blindbox(self):
@@ -1124,7 +1049,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_blindbox except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_checkin(self):
@@ -1143,7 +1067,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_checkin except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_signin(self):
@@ -1162,7 +1085,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_signin except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_dailycheckin(self):
@@ -1181,7 +1103,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_dailycheckin except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_medalcheckin(self):
@@ -1200,7 +1121,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_medalcheckin except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_aitrain(self):
@@ -1232,7 +1152,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_aicheckin(self):
@@ -1251,7 +1170,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aicheckin except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_deeptrain(self):
@@ -1268,7 +1186,6 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deeptrain except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
 
     @helper
     async def daily_clicker_alltask(self):
@@ -1345,4 +1262,3 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aicheckin except: {error}")
             return f"ERROR: {error}"
-            raise Exception(error)
