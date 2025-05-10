@@ -924,7 +924,7 @@ class GaeaDailyTask:
             if clicker_response is None:
                 return "ERROR"
             
-            self.client.userid = clicker_response.get('user_info', None).get('uid', None)
+            self.client.userid = clicker_response.get('uid', None)
             set_data_for_userid('', self.client.id, self.client.userid)
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
