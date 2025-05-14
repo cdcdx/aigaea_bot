@@ -36,7 +36,7 @@ def update_web3_config(config):
     else:
         CONTRACT_EMOTION = config["emotion"]
         CONTRACT_REWARD = config["reword"]
-    logger.info(f"update_web3_config RPC: {WEB3_RPC} CHAINID: {WEB3_CHAINID} USDC: {CONTRACT_USDC} EMOTION: {CONTRACT_EMOTION} REWARD: {CONTRACT_REWARD}")
+    logger.info(f"update_web3_config CHAINID: {WEB3_CHAINID} RPC: {WEB3_RPC} EMOTION: {CONTRACT_EMOTION} REWARD: {CONTRACT_REWARD} USDC: {CONTRACT_USDC}")
 
 async def get_web3_config():
     try:
@@ -64,7 +64,7 @@ async def get_web3_config():
                     for config in response['data']['config']:
                         if config['network'] == response['data']['network']:
                             web3_config = config
-            logger.success(f"get_web3_config web3_config => {web3_config}")
+            logger.debug(f"get_web3_config web3_config => {web3_config}")
 
             if web3_config:
                 # 保存到config
