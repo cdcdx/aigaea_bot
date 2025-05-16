@@ -26,6 +26,8 @@ GAEA_API = os.getenv("GAEA_API", default="https://api.aigaea.net")
 # CAPTCHA
 TWO_CAPTCHA_API_URL = os.getenv("TWO_CAPTCHA_API_URL", default="https://api.2captcha.com")
 TWO_CAPTCHA_API_KEY = os.getenv("TWO_CAPTCHA_API_KEY", default="")
+CAPTCHA_KEY = os.getenv("CAPTCHA_KEY", default="")
+REFERRAL_CODE = get_envsion("REFERRAL_CODE")
 
 ERA3_ONLINE_STAMP=int(os.getenv("ERA3_ONLINE_STAMP", default=1746806400))  # 第3季上线时间  2025-05-10 00:00:00
 

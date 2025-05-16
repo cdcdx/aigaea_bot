@@ -20,7 +20,7 @@ from utils.decorators import helper
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
 from utils.services import get_captcha_key
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP
-from config import WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_EMOTION, CONTRACT_REWARD
+from config import WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_EMOTION, CONTRACT_REWARD, CAPTCHA_KEY, REFERRAL_CODE
 
 class GaeaDailyTask:
     def __init__(self, client: GaeaClient) -> None:
@@ -117,42 +117,69 @@ class GaeaDailyTask:
             headers.pop('Authorization', None)
 
             # -------------------------------------------------------------------------- captcha
-            capcha_key=''
-            total_time = 0
-            timeout = 100
-            retry_flag=False
-            while True:
-                try:
-                    capcha_key = await get_captcha_key(client=self.client)
-                    if str(capcha_key).find("ERROR") > -1:
-                        raise f"{capcha_key}"
-                    break
-                except Exception as error:
-                    logger.error(f"id: {self.client.id} get_captcha_key retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} ")
-                    if "Proxy connection timed out" in f"{error}":
-                        retry_flag=True
-                    elif "Workers could not solve the Captcha" in f"{error}":
-                        retry_flag=True
-                    else:
-                        retry_flag=False
-                    if retry_flag:
-                        total_time += 30
-                        if total_time > timeout:
+            capcha_key = CAPTCHA_KEY if CAPTCHA_KEY else ''
+            if capcha_key == '':
+                total_time = 0
+                timeout = 100
+                retry_flag=False
+                while True:
+                    try:
+                        capcha_key = await get_captcha_key(client=self.client)
+                        if str(capcha_key).find("ERROR") > -1:
+                            raise f"{capcha_key}"
+                        break
+                    except Exception as error:
+                        logger.error(f"id: {self.client.id} get_captcha_key retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} ")
+                        if "Proxy connection timed out" in f"{error}":
+                            retry_flag=True
+                        elif "Workers could not solve the Captcha" in f"{error}":
+                            retry_flag=True
+                        else:
+                            retry_flag=False
+                        if retry_flag:
+                            total_time += 30
+                            if total_time > timeout:
+                                return f"{error}"
+                            await asyncio.sleep(30)
+                            continue
+                        else:
                             return f"{error}"
-                        await asyncio.sleep(30)
-                        continue
-                    else:
-                        return f"{error}"
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} get_captcha_key finished")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} get_captcha_key finished")
 
             logger.debug(f"capcha_key: {capcha_key}")
+            # -------------------------------------------------------------------------- username
+            username = self.client.email.split('@')[0]
+            url = GAEA_API.rstrip('/')+'/api/validate/username'
+            json_data = {
+                "username": username
+            }
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
+
+            code = response.get('code', None)
+            if code not in [200, 201]:
+                username = self.client.email
+            
+            delay = random.randint(5, 10)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker delay: {delay} seconds")
+            await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- register
             url = GAEA_API.rstrip('/')+'/api/auth/register'
             json_data = {
                 "email": self.client.email,
-                "username": self.client.email.split('@')[0],
+                "username": username,
                 "password": self.client.passwd,
-                "referral_code": "gaKJUXBVLa08Ad",
+                "referral_code": random.choice(REFERRAL_CODE) if REFERRAL_CODE else "gaKJUXBVLa08Ad",
                 "recaptcha_token": capcha_key
             }
 
@@ -192,33 +219,34 @@ class GaeaDailyTask:
             headers.pop('Authorization', None)
 
             # -------------------------------------------------------------------------- captcha
-            capcha_key=''
-            total_time = 0
-            timeout = 100
-            retry_flag=False
-            while True:
-                try:
-                    capcha_key = await get_captcha_key(client=self.client)
-                    if str(capcha_key).find("ERROR") > -1:
-                        raise f"{capcha_key}"
-                    break
-                except Exception as error:
-                    logger.error(f"id: {self.client.id} get_captcha_key retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} ")
-                    if "Proxy connection timed out" in f"{error}":
-                        retry_flag=True
-                    elif "Workers could not solve the Captcha" in f"{error}":
-                        retry_flag=True
-                    else:
-                        retry_flag=False
-                    if retry_flag:
-                        total_time += 30
-                        if total_time > timeout:
+            capcha_key = CAPTCHA_KEY if CAPTCHA_KEY else ''
+            if capcha_key == '':
+                total_time = 0
+                timeout = 100
+                retry_flag=False
+                while True:
+                    try:
+                        capcha_key = await get_captcha_key(client=self.client)
+                        if str(capcha_key).find("ERROR") > -1:
+                            raise f"{capcha_key}"
+                        break
+                    except Exception as error:
+                        logger.error(f"id: {self.client.id} get_captcha_key retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} ")
+                        if "Proxy connection timed out" in f"{error}":
+                            retry_flag=True
+                        elif "Workers could not solve the Captcha" in f"{error}":
+                            retry_flag=True
+                        else:
+                            retry_flag=False
+                        if retry_flag:
+                            total_time += 30
+                            if total_time > timeout:
+                                return f"{error}"
+                            await asyncio.sleep(30)
+                            continue
+                        else:
                             return f"{error}"
-                        await asyncio.sleep(30)
-                        continue
-                    else:
-                        return f"{error}"
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} get_captcha_key finished")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} get_captcha_key finished")
 
             logger.debug(f"capcha_key: {capcha_key}")
             # -------------------------------------------------------------------------- login
@@ -267,9 +295,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- session
             url = GAEA_API.rstrip('/')+'/api/auth/session'
 
@@ -308,9 +336,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- earninfo
             url = GAEA_API.rstrip('/')+'/api/earn/info'
 
@@ -349,9 +377,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- godhoodinfo
             url = GAEA_API.rstrip('/')+'/api/godhood/info'
 
@@ -390,9 +418,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- blindbox_list
             url = GAEA_API.rstrip('/')+'/api/godhood/blindbox/list'
 
@@ -440,9 +468,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- blindbox_open
             url = GAEA_API.rstrip('/')+'/api/godhood/blindbox/open'
             json_data = {
@@ -488,9 +516,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- checkin
             url = GAEA_API.rstrip('/')+'/api/mission/complete-mission'
             json_data = {
@@ -533,9 +561,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- signin
             url = GAEA_API.rstrip('/')+'/api/signin/complete'
             json_data = {
@@ -578,9 +606,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- dailycheckin
             url = GAEA_API.rstrip('/')+'/api/reward/daily-complete'
             weekday = dt.now().weekday() + 1
@@ -624,9 +652,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- medalcheckin
             url = GAEA_API.rstrip('/')+'/api/medal/complete'
             json_data = {}
@@ -669,9 +697,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- aitrain
             url = GAEA_API.rstrip('/')+'/api/ai/complete'
             json_data = {
@@ -714,9 +742,9 @@ class GaeaDailyTask:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
                 self.client.token = login_response.get('token', None)
-                set_data_for_token('', self.client.id, self.client.token)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid('', self.client.id, self.client.userid)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- aicheckin
             url = GAEA_API.rstrip('/')+'/api/ai/complete-mission'
             json_data = { }
@@ -925,12 +953,9 @@ class GaeaDailyTask:
                 return "ERROR"
             
             self.client.userid = clicker_response.get('uid', None)
-            set_data_for_userid('', self.client.id, self.client.userid)
+            set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
-            delay = random.randint(100, 200)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 0 register delay: {delay} seconds")
-            await asyncio.sleep(delay)
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_register except: {error}")
@@ -950,9 +975,9 @@ class GaeaDailyTask:
                 return "ERROR"
             
             self.client.token = clicker_response.get('token', None)
-            set_data_for_token('', self.client.id, self.client.token)
+            set_data_for_token(self.client.runname, self.client.id, self.client.token)
             self.client.userid = clicker_response.get('user_info', None).get('uid', None)
-            set_data_for_userid('', self.client.id, self.client.userid)
+            set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             return "SUCCESS"

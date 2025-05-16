@@ -13,7 +13,8 @@ from jose import jwt
 from utils.helpers import set_data_for_token
 
 class GaeaClient:
-    def __init__(self, id: str, userid: str, email: str, passwd:str, prikey: str, token: str, proxy: str) -> None:
+    def __init__(self, runname: str, id: str, userid: str, email: str, passwd:str, prikey: str, token: str, proxy: str) -> None:
+        self.runname = runname
         self.id = id
         self.userid = userid
         self.email = email

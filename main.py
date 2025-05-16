@@ -65,12 +65,12 @@ async def limit_concurrency(semaphore, func, **kwargs):
     async with semaphore:
         return await func(**kwargs)
 
-async def gaea_run_module_multiple_times(module, count, id, email, passwd, userid, token, prikey, proxy):
+async def gaea_run_module_multiple_times(module, count, runname, id, email, passwd, userid, token, prikey, proxy):
     delay = random.randint(5, 15)
     logger.debug(f"id: {id} userid: {userid} email: {email} account delay: {delay} seconds")
     await asyncio.sleep(delay)
 
-    result = await module(id, userid, email, passwd, prikey, token, proxy)
+    result = await module(runname, id, userid, email, passwd, prikey, token, proxy)
     logger.debug(f"id: {id} userid: {userid} email: {email} result: {result}")
 
 async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
@@ -80,7 +80,7 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
     if runthread<=0:
         runthread = sum(1 for id, _ in enumerate(datas, start=1) if is_id_valid(id, runeq, rungt, runlt))
         logger.debug(f"runthread: {runthread}")
-    runthread = min(runthread, 20)
+    runthread = min(runthread, 10)
     logger.info(f"runthread: {runthread}")
     semaphore = asyncio.Semaphore(runthread)
 
@@ -116,6 +116,7 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
                 gaea_run_module_multiple_times,
                 module=module,
                 count=count,
+                runname=runname,
                 id=data_id,
                 email=email,
                 passwd=passwd,
