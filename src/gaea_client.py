@@ -33,7 +33,7 @@ class GaeaClient:
             expire = payload.get("expire")
             if expire is None or expire <= current_timestamp:
                 self.token = ''
-                set_data_for_token('', self.id, self.token)
+                set_data_for_token(self.runname, self.id, self.token)
             else:
                 self.token = token
         else:
