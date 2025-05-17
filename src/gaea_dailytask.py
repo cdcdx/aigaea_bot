@@ -862,8 +862,8 @@ class GaeaDailyTask:
     async def deeptrain_clicker(self, emotion_int) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: prikey length must be 64 or 66")
-                raise Exception(f"prikey length must be 64 or 66")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
             
             emotion_int = int(emotion_int)
             if emotion_int not in [1,2,3]:
@@ -1021,8 +1021,8 @@ class GaeaDailyTask:
     async def aicheckin_clicker(self) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: prikey length must be 64 or 66")
-                raise Exception(f"prikey length must be 64 or 66")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
             
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
