@@ -411,6 +411,48 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker except: {error}")
 
+    async def era3info_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- era3info
+            url = GAEA_API.rstrip('/')+'/api/ranking/era3?page=1&limit=20'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['user']}")
+                return response['user']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker ERROR: {message}")
+                    raise Exception(message)
+            
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker except: {error}")
+
     async def blindbox_list_clicker(self) -> None:
         try:
             headers = self.getheaders()
@@ -1028,7 +1070,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} already registered")
                 return "SUCCESS"
             
-            headers = self.getheaders()
             # -------------------------------------------------------------------------- register
             clicker_response = await self.register_clicker()
             if clicker_response is None:
@@ -1037,7 +1078,9 @@ class GaeaDailyTask:
             self.client.userid = clicker_response.get('uid', None)
             set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            clicker_response.pop('referral_link', None)
+            clicker_response.pop('avatar', None)
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_register except: {error}")
@@ -1050,7 +1093,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} already login")
                 return "SUCCESS"
             
-            headers = self.getheaders()
             # -------------------------------------------------------------------------- login
             clicker_response = await self.login_clicker()
             if clicker_response is None:
@@ -1061,7 +1103,7 @@ class GaeaDailyTask:
             self.client.userid = clicker_response.get('user_info', None).get('uid', None)
             set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response['user_info']}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_login except: {error}")
@@ -1128,6 +1170,25 @@ class GaeaDailyTask:
             return f"ERROR: {error}"
 
     @helper
+    async def daily_clicker_era3info(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- era3_info
+            clicker_response = await self.era3info_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3_info clicker_response: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_era3info except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
     async def daily_clicker_openblindbox(self):
         try:
             if len(self.client.token) == 0:
@@ -1182,10 +1243,9 @@ class GaeaDailyTask:
             delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list delay: {delay} seconds")
             await asyncio.sleep(delay)
-            
             # -------------------------------------------------------------------------- referral_complete
-            # referrallevel = clicker_response.get("level", 0)
             referrallist = clicker_response.get("list", [])
+            idx=0
             for item in referrallist:
                 status = item.get("status", 0)
                 if status == 1:
@@ -1193,8 +1253,13 @@ class GaeaDailyTask:
                     clicker_response = await self.referral_complete_clicker()
                     if clicker_response is None:
                         return "ERROR"
-                    
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+
+                    idx+=1
+                    delay = random.randint(1, 5)
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete delay: {delay} seconds")
+                    await asyncio.sleep(delay)
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete count: {idx}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_referralreword except: {error}")

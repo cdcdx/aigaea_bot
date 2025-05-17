@@ -14,7 +14,7 @@ from termcolor import cprint
 
 from src.functions import (
     gaea_clicker_register, gaea_clicker_login,
-    gaea_clicker_session, gaea_clicker_earninfo, gaea_clicker_godhoodinfo,
+    gaea_clicker_session, gaea_clicker_earninfo, gaea_clicker_godhoodinfo, gaea_clicker_era3info,
     gaea_clicker_openblindbox, gaea_clicker_referralreword, 
     gaea_clicker_checkin, gaea_clicker_signin,
     gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, gaea_clicker_aitrain, gaea_clicker_aicheckin,
@@ -32,6 +32,7 @@ MODULE_MAPPING = {
     'gaea_clicker_session':      gaea_clicker_session,
     'gaea_clicker_earninfo':     gaea_clicker_earninfo,
     'gaea_clicker_godhoodinfo':  gaea_clicker_godhoodinfo,
+    'gaea_clicker_era3info':     gaea_clicker_era3info,
     'gaea_clicker_openblindbox':   gaea_clicker_openblindbox,
     'gaea_clicker_referralreword': gaea_clicker_referralreword,
     # 'gaea_clicker_checkin': gaea_clicker_checkin,
@@ -67,12 +68,12 @@ async def limit_concurrency(semaphore, func, **kwargs):
         return await func(**kwargs)
 
 async def gaea_run_module_multiple_times(module, count, runname, id, email, passwd, userid, token, prikey, proxy):
-    delay = random.randint(5, 15)
-    logger.debug(f"id: {id} userid: {userid} email: {email} account delay: {delay} seconds")
-    await asyncio.sleep(delay)
-
     result = await module(runname, id, userid, email, passwd, prikey, token, proxy)
     logger.debug(f"id: {id} userid: {userid} email: {email} result: {result}")
+    
+    delay = random.randint(5, 10)
+    logger.debug(f"id: {id} userid: {userid} email: {email} account delay: {delay} seconds")
+    await asyncio.sleep(delay)
 
 async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
     datas = get_data_for_token(runname)
@@ -166,6 +167,7 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🚀 Gaea tasks - session",         'gaea_clicker_session',         shortcut_key="s"),
                     Choice("🚀 Gaea tasks - earninfo",        'gaea_clicker_earninfo',        shortcut_key="e"),
                     Choice("🚀 Gaea tasks - godhoodinfo",     'gaea_clicker_godhoodinfo',     shortcut_key="g"),
+                    Choice("🚀 Gaea tasks - era3info",        'gaea_clicker_era3info',        shortcut_key="i"),
                     Choice("🔥 Gaea tasks - openblindbox",    'gaea_clicker_openblindbox',    shortcut_key="o"),
                     Choice("🔥 Gaea tasks - referralreword",  'gaea_clicker_referralreword',  shortcut_key="f"),
                     # Choice("🔥 Gaea daily tasks - checkin   (Once a day)",   'gaea_clicker_checkin',   shortcut_key="1"),

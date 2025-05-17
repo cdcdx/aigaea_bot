@@ -35,6 +35,12 @@ async def gaea_clicker_godhoodinfo(runname, id, userid, email, passwd, prikey, t
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_godhoodinfo()
 
+async def gaea_clicker_era3info(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-era3info")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_era3info()
+
 async def gaea_clicker_openblindbox(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-blindbox")
@@ -43,7 +49,7 @@ async def gaea_clicker_openblindbox(runname, id, userid, email, passwd, prikey, 
 
 async def gaea_clicker_referralreword(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
-        os.system("title gaea-blindbox")
+        os.system("title gaea-referralreword")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_referralreword()
 
