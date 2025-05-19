@@ -723,7 +723,48 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker except: {error}")
 
-    async def dailycheckin_clicker(self) -> None:
+    async def dailylist_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- dailylist
+            url = GAEA_API.rstrip('/')+'/api/reward/daily-list'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers,
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker except: {error}")
+
+    async def dailycheckin_clicker(self, randint) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -735,9 +776,12 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- dailycheckin
             url = GAEA_API.rstrip('/')+'/api/reward/daily-complete'
-            weekday = dt.now().weekday() + 1
+            # weekday = dt.now().weekday() + 1
+            # json_data = {
+            #     "id": weekday
+            # }
             json_data = {
-                "id": weekday
+                "id": randint
             }
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker url: {url}")
@@ -1312,11 +1356,34 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            # -------------------------------------------------------------------------- 1 dailycheckin
-            clicker_response = await self.dailycheckin_clicker()
+            # -------------------------------------------------------------------------- dailylist
+            clicker_response = await self.dailylist_clicker()
             if clicker_response is None:
                 return "ERROR"
-            
+            if clicker_response['today'] == 1:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Daily rewards completed")
+                return "SUCCESS"
+            else:
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                
+                # --------------------------------------------------------------------------
+                dailylist = clicker_response.get("list", [])
+                daily = 0
+                for item in dailylist:
+                    reward = item.get("reward", "")
+                    if len(reward) > 0:
+                        continue
+                    daily = item.get("daily", 0)
+                    break
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily: {daily}")
+                
+                # -------------------------------------------------------------------------- 1 dailycheckin
+                clicker_response = await self.dailycheckin_clicker(daily)
+                if clicker_response is None:
+                    return "ERROR"
+                
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
@@ -1445,12 +1512,36 @@ class GaeaDailyTask:
             # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 signin_clicker delay: {delay} seconds")
             # await asyncio.sleep(delay)
 
-            # -------------------------------------------------------------------------- 1 dailycheckin
-            await self.dailycheckin_clicker()
-
+            # -------------------------------------------------------------------------- dailylist
+            clicker_response = await self.dailylist_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
             delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 dailycheckin_clicker delay: {delay} seconds")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
             await asyncio.sleep(delay)
+            
+            # --------------------------------------------------------------------------
+            if clicker_response['today'] == 1:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Daily rewards completed")
+                # return "SUCCESS"
+            else:
+                dailylist = clicker_response.get("list", [])
+                daily = 0
+                for item in dailylist:
+                    reward = item.get("reward", "")
+                    if len(reward) > 0:
+                        continue
+                    daily = item.get("daily", 0)
+                    break
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily: {daily}")
+                
+                # -------------------------------------------------------------------------- 1 dailycheckin
+                await self.dailycheckin_clicker(daily)
+
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 dailycheckin_clicker delay: {delay} seconds")
+                await asyncio.sleep(delay)
 
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker()
