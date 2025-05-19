@@ -77,13 +77,13 @@ async def gaea_run_module_multiple_times(module, count, runname, id, email, pass
 
 async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
     datas = get_data_for_token(runname)
-    logger.info(f"runeq: {runeq} rungt: {rungt} runlt: {runlt}")
+    logger.info(f"runname: {runname} runeq: {runeq} rungt: {rungt} runlt: {runlt}")
 
     if runthread<=0:
         runthread = sum(1 for id, _ in enumerate(datas, start=1) if is_id_valid(id, runeq, rungt, runlt))
-        logger.debug(f"runthread: {runthread}")
+        # logger.debug(f"runthread: {runthread}")
     runthread = min(runthread, 10)
-    logger.info(f"runthread: {runthread}")
+    logger.info(f"runname: {runname} runthread: {runthread}")
     semaphore = asyncio.Semaphore(runthread)
 
     count=0
@@ -145,6 +145,7 @@ def choose_emotion():
     emotion_choice = select(
         'Choose Emotion',
         choices=[
+            Choice("Random",   '0', shortcut_key="0"),
             Choice("Postive",  '1', shortcut_key="1"),
             Choice("Neutral",  '2', shortcut_key="2"),
             Choice("Negative", '3', shortcut_key="3"),

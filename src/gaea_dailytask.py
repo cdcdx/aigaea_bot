@@ -903,6 +903,47 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker except: {error}")
 
+    async def ailist_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- ailist
+            url = GAEA_API.rstrip('/')+'/api/ai/list'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers,
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker except: {error}")
+
     async def deeptrain_clicker(self, emotion_int) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
@@ -1064,10 +1105,6 @@ class GaeaDailyTask:
 
     async def aicheckin_clicker(self) -> None:
         try:
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
@@ -1360,14 +1397,15 @@ class GaeaDailyTask:
             clicker_response = await self.dailylist_clicker()
             if clicker_response is None:
                 return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
             if clicker_response['today'] == 1:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Daily rewards completed")
                 return "SUCCESS"
             else:
-                delay = random.randint(10, 20)
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
-                await asyncio.sleep(delay)
-                
                 # --------------------------------------------------------------------------
                 dailylist = clicker_response.get("list", [])
                 daily = 0
@@ -1425,25 +1463,36 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            # -------------------------------------------------------------------------- godhoodinfo
-            clicker_response = await self.godhoodinfo_clicker()
+            # -------------------------------------------------------------------------- ailist
+            clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
-            is_godhood_id = "0"
-            if clicker_response['mood']:
-                is_godhood_id = "1"
-            
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
-            await asyncio.sleep(delay)
-            # -------------------------------------------------------------------------- 3 aitrain
-            emotion=os.environ.get('CHOOSE_EMOTION', '3')
-            emotion_detail=emotion+'_1_'+is_godhood_id
-            clicker_response = await self.aitrain_clicker(emotion_detail)
-            if clicker_response is None:
-                return "ERROR"
-            
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            if len(clicker_response['today']) > 0:
+                emotion = clicker_response['today'].split('_')[0]
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Training already completed")
+                # return "SUCCESS"
+            else:
+                # -------------------------------------------------------------------------- godhoodinfo
+                clicker_response = await self.godhoodinfo_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                is_godhood_id = "0"
+                if clicker_response['mood']:
+                    is_godhood_id = "1"
+                
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- 3 aitrain
+                emotion=os.environ.get('CHOOSE_EMOTION', '0')
+                if emotion == '0':
+                    emotion = random.choice(["1", "2", "3"])
+                emotion_detail=emotion+'_1_'+is_godhood_id
+                clicker_response = await self.aitrain_clicker(emotion_detail)
+                if clicker_response is None:
+                    return "ERROR"
+                
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain except: {error}")
@@ -1460,8 +1509,21 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 raise "ERROR"
             
+            # -------------------------------------------------------------------------- ailist
+            clicker_response = await self.ailist_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            if len(clicker_response['today']) > 0:
+                emotion = clicker_response['today'].split('_')[0]
+            else:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- 5 deeptrain
-            emotion=os.environ.get('CHOOSE_EMOTION', '3')
             await self.deeptrain_clicker(emotion)
 
             return "SUCCESS"
@@ -1476,16 +1538,38 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                raise "ERROR"
-            
-            # -------------------------------------------------------------------------- 4 aicheckin
-            clicker_response = await self.aicheckin_clicker()
+            today = time.strftime("%d/%m/%Y", time.localtime())
+            # -------------------------------------------------------------------------- ailist
+            clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
             
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            if len(clicker_response['today']) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
+                return "ERROR"
+            
+            ailist = clicker_response['cycle']
+            if ailist == []:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the deeptraining first")
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist: {ailist}")
+            today_complete = 0
+            for item in ailist:
+                if item['date'] == today:
+                    today_complete = 1 if item['status'] == 2 else 0
+            if today_complete:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Checkin already completed")
+                # return "SUCCESS"
+            else:
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- 4 aicheckin
+                clicker_response = await self.aicheckin_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aicheckin except: {error}")
@@ -1543,6 +1627,7 @@ class GaeaDailyTask:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 dailycheckin_clicker delay: {delay} seconds")
                 await asyncio.sleep(delay)
 
+
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker()
             if clicker_response is None:
@@ -1555,31 +1640,44 @@ class GaeaDailyTask:
 
             if clicker_response['medal']:
                 # -------------------------------------------------------------------------- 2 medalcheckin
-                await self.medalcheckin_clicker()
+                clicker_response = await self.medalcheckin_clicker()
+                if clicker_response is None:
+                    return "ERROR"
 
                 delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 dailycheckin_clicker delay: {delay} seconds")
                 await asyncio.sleep(delay)
 
-            # -------------------------------------------------------------------------- godhoodinfo
-            clicker_response = await self.godhoodinfo_clicker()
+
+            # -------------------------------------------------------------------------- ailist
+            clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
-            is_godhood_id = "0"
-            if clicker_response['mood']:
-                is_godhood_id = "1"
-            
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
-            await asyncio.sleep(delay)
-            # -------------------------------------------------------------------------- 3 aitrain
-            emotion=os.environ.get('CHOOSE_EMOTION', '3')
-            emotion_detail=emotion+'_1_'+is_godhood_id
-            await self.aitrain_clicker(emotion_detail)
+            if len(clicker_response['today']) > 0:
+                emotion = clicker_response['today'].split('_')[0]
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Training already completed")
+                # return "SUCCESS"
+            else:
+                # -------------------------------------------------------------------------- godhoodinfo
+                clicker_response = await self.godhoodinfo_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                is_godhood_id = "1" if clicker_response['mood'] else "0"
+                
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- 3 aitrain
+                emotion=os.environ.get('CHOOSE_EMOTION', '0')
+                if emotion == '0':
+                    emotion = random.choice(["1", "2", "3"])
+                emotion_detail=emotion+'_1_'+is_godhood_id
+                await self.aitrain_clicker(emotion_detail)
 
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 3 aitrain_clicker delay: {delay} seconds")
-            await asyncio.sleep(delay)
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 3 aitrain_clicker delay: {delay} seconds")
+                await asyncio.sleep(delay)
+
 
             # --------------------------------------------------------------------------
             if len(self.client.prikey) in [64,66]:
@@ -1590,14 +1688,40 @@ class GaeaDailyTask:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deeptrain_clicker delay: {delay} seconds")
                 await asyncio.sleep(delay)
 
-                # -------------------------------------------------------------------------- 5 aicheckin
-                await self.aicheckin_clicker()
 
+            today = time.strftime("%d/%m/%Y", time.localtime())
+            # -------------------------------------------------------------------------- ailist
+            clicker_response = await self.ailist_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            if len(clicker_response['today']) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
+                return "ERROR"
+            
+            ailist = clicker_response['cycle']
+            if ailist == []:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the deeptraining first")
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist: {ailist}")
+            today_complete = 0
+            for item in ailist:
+                if item['date'] == today:
+                    today_complete = 1 if item['status'] == 2 else 0
+            if today_complete:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Checkin already completed")
+                # return "SUCCESS"
+            else:
                 delay = random.randint(10, 20)
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 aicheckin_clicker delay: {delay} seconds")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
                 await asyncio.sleep(delay)
+                
+                # -------------------------------------------------------------------------- 5 aicheckin
+                clicker_response = await self.aicheckin_clicker()
+                if clicker_response is None:
+                    return "ERROR"
 
-            # --------------------------------------------------------------------------
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
 
             return "SUCCESS"
         except Exception as error:
