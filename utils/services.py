@@ -20,6 +20,7 @@ def update_web3_config(config):
     set_envsion("WEB3_RPC", config.get("rpc"), format=False)
     set_envsion("WEB3_CHAINID", str(config.get("chain_id")), format=False)
     set_envsion("CONTRACT_USDC", config.get("usd"), format=False)
+    set_envsion("CONTRACT_INVITE", config.get("invite"), format=False)
     if ERA3_ONLINE_STAMP < current_timestamp and "emotion2" in config:
         set_envsion("CONTRACT_EMOTION", config.get("emotion2"), format=False)
         set_envsion("CONTRACT_REWARD", config.get("reward2"), format=False)
@@ -30,13 +31,14 @@ def update_web3_config(config):
     WEB3_RPC = config["rpc"]
     WEB3_CHAINID = config["chain_id"]
     CONTRACT_USDC = config["usd"]
+    CONTRACT_INVITE = config["invite"]
     if ERA3_ONLINE_STAMP < current_timestamp and "emotion2" in config:
         CONTRACT_EMOTION = config["emotion2"]
         CONTRACT_REWARD = config["reward2"]
     else:
         CONTRACT_EMOTION = config["emotion"]
         CONTRACT_REWARD = config["reword"]
-    logger.info(f"update_web3_config CHAINID: {WEB3_CHAINID} RPC: {WEB3_RPC} EMOTION: {CONTRACT_EMOTION} REWARD: {CONTRACT_REWARD} USDC: {CONTRACT_USDC}")
+    logger.info(f"update_web3_config CHAINID: {WEB3_CHAINID} RPC: {WEB3_RPC} INVITE: {CONTRACT_INVITE} EMOTION: {CONTRACT_EMOTION} REWARD: {CONTRACT_REWARD} USDC: {CONTRACT_USDC}")
 
 async def get_web3_config():
     try:

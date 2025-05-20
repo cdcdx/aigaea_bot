@@ -15,7 +15,7 @@ from termcolor import cprint
 from src.functions import (
     gaea_clicker_register, gaea_clicker_login,
     gaea_clicker_session, gaea_clicker_earninfo, gaea_clicker_godhoodinfo, gaea_clicker_era3info,
-    gaea_clicker_openblindbox, gaea_clicker_referralreword, 
+    gaea_clicker_openblindbox, gaea_clicker_referralreword, gaea_clicker_bindaddress, gaea_clicker_godhoodid,
     gaea_clicker_checkin, gaea_clicker_signin,
     gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, gaea_clicker_aitrain, gaea_clicker_aicheckin,
     gaea_clicker_alltask, gaea_clicker_deeptrain
@@ -35,6 +35,8 @@ MODULE_MAPPING = {
     'gaea_clicker_era3info':     gaea_clicker_era3info,
     'gaea_clicker_openblindbox':   gaea_clicker_openblindbox,
     'gaea_clicker_referralreword': gaea_clicker_referralreword,
+    'gaea_clicker_bindaddress':    gaea_clicker_bindaddress,
+    'gaea_clicker_godhoodid':  gaea_clicker_godhoodid,
     # 'gaea_clicker_checkin': gaea_clicker_checkin,
     # 'gaea_clicker_signin':  gaea_clicker_signin,
     'gaea_clicker_dailycheckin': gaea_clicker_dailycheckin,
@@ -171,6 +173,8 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🚀 Gaea tasks - era3info",        'gaea_clicker_era3info',        shortcut_key="i"),
                     Choice("🔥 Gaea tasks - openblindbox",    'gaea_clicker_openblindbox',    shortcut_key="o"),
                     Choice("🔥 Gaea tasks - referralreword",  'gaea_clicker_referralreword',  shortcut_key="f"),
+                    Choice("🔥 Gaea tasks - bindaddress",     'gaea_clicker_bindaddress',     shortcut_key="b"),
+                    Choice("🔥 Gaea tasks - godhoodid",       'gaea_clicker_godhoodid',       shortcut_key="h"),
                     # Choice("🔥 Gaea daily tasks - checkin   (Once a day)",   'gaea_clicker_checkin',   shortcut_key="1"),
                     # Choice("🔥 Gaea daily tasks - signin    (Once a day)",   'gaea_clicker_signin',    shortcut_key="2"),
                     Choice("🔥 Gaea daily tasks - dailycheckin   (Once a day)",   'gaea_clicker_dailycheckin',   shortcut_key="1"),
@@ -197,14 +201,14 @@ def main(runname, runeq, rungt, runlt, runthread):
 
 async def gaea_daily_task_modules(module, runname, runeq, runthread):
     module_mapping = {
-        gaea_clicker_register: "launch_clicker_register",
-        gaea_clicker_login: "launch_clicker_login",
+        gaea_clicker_register:  "launch_clicker_register",
+        gaea_clicker_login:     "launch_clicker_login",
         gaea_clicker_dailycheckin: "launch_clicker_dailycheckin",
         gaea_clicker_medalcheckin: "launch_clicker_medalcheckin",
-        gaea_clicker_aitrain: "launch_clicker_aitrain",
-        gaea_clicker_aicheckin: "launch_clicker_aicheckin",
-        gaea_clicker_alltask: "launch_clicker_alltask",
+        gaea_clicker_aitrain:   "launch_clicker_aitrain",
         gaea_clicker_deeptrain: "launch_clicker_deeptrain",
+        gaea_clicker_aicheckin: "launch_clicker_aicheckin",
+        gaea_clicker_alltask:   "launch_clicker_alltask",
     }
     module_name = module_mapping.get(module, "none")
 
@@ -231,7 +235,7 @@ async def gaea_daily_task_modules(module, runname, runeq, runthread):
 
 def daily_task_module():
     logger.info("Execute alltask scheduled task...")
-    asyncio.run(gaea_daily_task_modules(module=gaea_clicker_aitrain, runname=run_name, runeq=run_eq, runthread=run_thread))
+    asyncio.run(gaea_daily_task_modules(module=gaea_clicker_alltask, runname=run_name, runeq=run_eq, runthread=run_thread))
 
 def main_task():
     # 获取当前时间

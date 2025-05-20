@@ -16,6 +16,7 @@ from src.functions import (
 
 class TaskManager:
     def __init__(self, runname) -> None:
+        self.runname = runname
         self.datas = get_data_for_token(runname)
         self.count = len(self.datas)
         self.lock = asyncio.Lock()
@@ -45,8 +46,8 @@ class TaskManager:
                 # prikey=parts[4].strip()
                 # proxy=parts[5].strip()
 
-                result = await task_function(id, userid, email, passwd, prikey, token, proxy)
-                if str(result).find("ERROR") > -1 and str(result).find("SUCCESS") == -1:
+                result = await task_function(self.runname, id, userid, email, passwd, prikey, token, proxy)
+                if str(result).find("ERROR") > -1:
                     logger.error(f"thread: {thread} id: {id} userid: {userid} email: {email} {module_name} result: {result}")
                     break
                 else:
@@ -55,6 +56,7 @@ class TaskManager:
                 logger.info(f"thread: {thread} id: {id} userid: {userid} email: {email} | Completed account usage")
             except Exception as e:
                 logger.error(f"An error occurred in {module_name}: {e}")
+                time.sleep(60)
 
     async def launch_clicker_checkin(self, thread: int, runid: int, module_name: str) -> None:
         await self._launch_task(thread, runid, module_name, gaea_clicker_checkin)

@@ -130,3 +130,26 @@ contract_abi_emotion2 = [
         "type": "function"
     },
 ]
+
+contract_abi_invite = [
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "_addr", "type": "address" }
+		],
+		"name": "inviter",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "", "type": "address" }
+		],
+		"name": "isgodhoodID",
+		"outputs": [
+			{ "internalType": "bool", "name": "", "type": "bool" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+]

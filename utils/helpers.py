@@ -38,7 +38,7 @@ def set_data_for_token(name,id,token):
     if len(parts) < 4:
         raise ValueError(f"Line {id} is out of range.")
     # logger.debug(f"parts: {parts}")
-    email, passwd, userid, token1, prikey, proxy = map(str.strip, parts)
+    email, passwd, userid, token_old, prikey, proxy = map(str.strip, parts)
 
     datas[id - 1] = f"{email.ljust(23)},{passwd},{userid},{token},{prikey},{proxy}"
 
