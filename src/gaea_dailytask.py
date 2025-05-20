@@ -1298,7 +1298,8 @@ class GaeaDailyTask:
                 logger.info(f"max_fee_per_gas: {max_fee_per_gas} wei")
 
                 # 构建交易 - 情绪合约金额授权
-                transaction = usdc_contract.functions.approve(emotion_address, current_period_price).build_transaction(
+                MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
+                transaction = usdc_contract.functions.approve(emotion_address, MAX_UINT256).build_transaction(
                     {
                         "chainId": WEB3_CHAINID,
                         "from": sender_address,
