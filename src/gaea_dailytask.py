@@ -740,7 +740,7 @@ class GaeaDailyTask:
             code = response.get('code', None)
             if code in [200, 201]:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response}")
-                return response['data']
+                return response
             else:
                 message = response.get('msg', None)
                 if message is None:
