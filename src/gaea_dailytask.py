@@ -680,6 +680,80 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bind_address_clicker except: {error}")
 
+    async def godhoodemotion_clicker(self) -> None:
+        try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            # -------------------------------------------------------------------------- godhoodid
+            web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
+            # 连接rpc节点
+            connected = web3_obj.is_connected()
+            if not connected:
+                logger.error(f"Ooops! Failed to eth.is_connected.")
+                raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} white_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            # 购卡合约地址
+            invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
+            invite_contract = web3_obj.eth.contract(address=invite_address, abi=contract_abi_invite)
+        
+            # 当前是否购卡
+            is_godhoodid = invite_contract.functions.isgodhoodID( sender_address ).call()
+            logger.debug(f"is_godhoodid: {is_godhoodid}")
+
+            if is_godhoodid is None: # 
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please mint GODHOOD ID first | godhoodid: {is_godhoodid}")
+                return 'Please mint GODHOOD ID first'
+
+            headers = self.getheaders()
+            # -------------------------------------------------------------------------- godhood_emotion
+            url = GAEA_API.rstrip('/')+'/api/godhood/emotion'
+            json_data = {
+                "emotion_code": "INTJ",
+                "emotion_detail": {"type": "INTJ", "EI_E_ratio": "32", "EI_I_ratio": "32", "SN_N_ratio": "37", "SN_S_ratio": "57", "emotion_code": "INTJ"}
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker except: {error}")
+
     # --------------------------------------------------------------------------
 
     async def checkin_clicker(self) -> None:
@@ -1042,7 +1116,7 @@ class GaeaDailyTask:
             logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
 
             # USDC余额不足
-            inviter_price = 10000000 # 10 USDC
+            inviter_price = 20000000 # 20 USDC
             if inviter_price > sender_balance_usdc:
                 logger.error(f"Ooops! Insufficient USDC balance.")
                 return "Insufficient USDC balance."
@@ -1064,7 +1138,7 @@ class GaeaDailyTask:
                 logger.info(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
                 logger.info(f"max_fee_per_gas: {max_fee_per_gas} wei")
 
-                # 构建交易 - 情绪合约金额授权
+                # 构建交易 - 购卡合约金额授权
                 transaction = usdc_contract.functions.approve(invite_address, inviter_price).build_transaction(
                     {
                         "chainId": WEB3_CHAINID,
@@ -1119,8 +1193,16 @@ class GaeaDailyTask:
             if tx_success == False:
                 logger.error(f"Ooops! Failed to send_transaction.")
                 raise Exception("Failed to send_transaction.")
+            else:
+                # -------------------------------------------------------------------------- godhoodemotion
+                clicker_response = await self.godhoodemotion_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             
             logger.success(f"The inviter transaction was send successfully! - transaction: {transaction}")
+            return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_clicker except: {error}")
 
@@ -1548,7 +1630,7 @@ class GaeaDailyTask:
                 return "ERROR"
             
             # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
             if clicker_response['eth_address'] is not None and clicker_response['eth_address'] != "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The address has been bound")
                 return "SUCCESS"
@@ -1731,6 +1813,24 @@ class GaeaDailyTask:
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodid except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_godhoodemotion(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- godhoodemotion
+            clicker_response = await self.godhoodemotion_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodinfo except: {error}")
             return f"ERROR: {error}"
 
     @helper

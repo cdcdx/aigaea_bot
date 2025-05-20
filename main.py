@@ -15,7 +15,7 @@ from termcolor import cprint
 from src.functions import (
     gaea_clicker_register, gaea_clicker_login,
     gaea_clicker_session, gaea_clicker_earninfo, gaea_clicker_godhoodinfo, gaea_clicker_era3info,
-    gaea_clicker_openblindbox, gaea_clicker_referralreword, gaea_clicker_bindaddress, gaea_clicker_godhoodid,
+    gaea_clicker_openblindbox, gaea_clicker_referralreword, gaea_clicker_bindaddress, gaea_clicker_godhoodid, gaea_clicker_godhoodemotion, 
     gaea_clicker_checkin, gaea_clicker_signin,
     gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, gaea_clicker_aitrain, gaea_clicker_aicheckin,
     gaea_clicker_alltask, gaea_clicker_deeptrain
@@ -36,7 +36,8 @@ MODULE_MAPPING = {
     'gaea_clicker_openblindbox':   gaea_clicker_openblindbox,
     'gaea_clicker_referralreword': gaea_clicker_referralreword,
     'gaea_clicker_bindaddress':    gaea_clicker_bindaddress,
-    'gaea_clicker_godhoodid':  gaea_clicker_godhoodid,
+    'gaea_clicker_godhoodid':      gaea_clicker_godhoodid,
+    'gaea_clicker_godhoodemotion': gaea_clicker_godhoodemotion,
     # 'gaea_clicker_checkin': gaea_clicker_checkin,
     # 'gaea_clicker_signin':  gaea_clicker_signin,
     'gaea_clicker_dailycheckin': gaea_clicker_dailycheckin,
@@ -175,6 +176,7 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🔥 Gaea tasks - referralreword",  'gaea_clicker_referralreword',  shortcut_key="f"),
                     Choice("🔥 Gaea tasks - bindaddress",     'gaea_clicker_bindaddress',     shortcut_key="b"),
                     Choice("🔥 Gaea tasks - godhoodid",       'gaea_clicker_godhoodid',       shortcut_key="h"),
+                    Choice("🔥 Gaea tasks - godhoodemotion",  'gaea_clicker_godhoodemotion',  shortcut_key="m"),
                     # Choice("🔥 Gaea daily tasks - checkin   (Once a day)",   'gaea_clicker_checkin',   shortcut_key="1"),
                     # Choice("🔥 Gaea daily tasks - signin    (Once a day)",   'gaea_clicker_signin',    shortcut_key="2"),
                     Choice("🔥 Gaea daily tasks - dailycheckin   (Once a day)",   'gaea_clicker_dailycheckin',   shortcut_key="1"),
