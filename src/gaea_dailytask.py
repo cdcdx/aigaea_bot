@@ -683,7 +683,7 @@ class GaeaDailyTask:
     async def godhoodemotion_clicker(self) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_clicker ERROR: Incorrect private key")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
             # -------------------------------------------------------------------------- godhoodid
@@ -701,13 +701,11 @@ class GaeaDailyTask:
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} white_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            # USDC合约地址
-            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
-            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+
             # 购卡合约地址
             invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
             invite_contract = web3_obj.eth.contract(address=invite_address, abi=contract_abi_invite)
-        
+
             # 当前是否购卡
             is_godhoodid = invite_contract.functions.isgodhoodID( sender_address ).call()
             logger.debug(f"is_godhoodid: {is_godhoodid}")
@@ -1253,9 +1251,11 @@ class GaeaDailyTask:
             # 当期ID
             current_period_id = emotion_contract.functions.Issue().call()
             logger.debug(f"current_period_id: {current_period_id}")
+            time.sleep(1)
             # 当前是否打卡
             current_emotion = emotion_contract.functions.IssueAddressEmotions(current_period_id, sender_address).call()
             logger.debug(f"current_emotion: {current_emotion}")
+            time.sleep(1)
 
             if current_emotion > 0: # 
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker already completed | emotion: {current_emotion}")
@@ -1633,7 +1633,7 @@ class GaeaDailyTask:
             # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
             if clicker_response['eth_address'] is not None and clicker_response['eth_address'] != "":
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The address has been bound")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The address has been bound")
                 return "SUCCESS"
             
             delay = random.randint(10, 20)
@@ -1807,6 +1807,23 @@ class GaeaDailyTask:
             if len(self.client.prikey) not in [64,66]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            if clicker_response['eth_address'] == "":
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bindaddress delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- bindaddress
+                clicker_response = await self.bind_address_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             
             # -------------------------------------------------------------------------- 5 godhoodid
             await self.godhoodid_clicker()
