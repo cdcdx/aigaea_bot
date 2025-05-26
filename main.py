@@ -17,8 +17,8 @@ from src.functions import (
     gaea_clicker_session, gaea_clicker_earninfo, gaea_clicker_godhoodinfo, gaea_clicker_era3info,
     gaea_clicker_openblindbox, gaea_clicker_referralreword, gaea_clicker_bindaddress, gaea_clicker_godhoodid, gaea_clicker_godhoodemotion, 
     gaea_clicker_checkin, gaea_clicker_signin,
-    gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, gaea_clicker_aitrain, gaea_clicker_aicheckin,
-    gaea_clicker_alltask, gaea_clicker_deeptrain
+    gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, gaea_clicker_aitrain, gaea_clicker_deeptrain, gaea_clicker_tickettrain, gaea_clicker_aicheckin,
+    gaea_clicker_alltask
 )
 from src.gaea_client import GaeaClient
 from src.task_manager import TaskManager
@@ -43,9 +43,10 @@ MODULE_MAPPING = {
     'gaea_clicker_dailycheckin': gaea_clicker_dailycheckin,
     'gaea_clicker_medalcheckin': gaea_clicker_medalcheckin,
     'gaea_clicker_aitrain':   gaea_clicker_aitrain,
+    'gaea_clicker_deeptrain': gaea_clicker_deeptrain,
+    'gaea_clicker_tickettrain': gaea_clicker_tickettrain,
     'gaea_clicker_aicheckin': gaea_clicker_aicheckin,
     'gaea_clicker_alltask':   gaea_clicker_alltask,
-    'gaea_clicker_deeptrain': gaea_clicker_deeptrain,
 }
 # 预编译正则表达式
 PASSWD_REGEX_PATTERN = r'^.*(?=.{8,})(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).*$'
@@ -139,7 +140,7 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
         logger.error(f"Error occurred while running tasks: {e}")
 
 def run_module(module, runname, runeq, rungt, runlt, runthread):
-    if module in [gaea_clicker_aitrain, gaea_clicker_alltask, gaea_clicker_deeptrain]:
+    if module in [gaea_clicker_aitrain, gaea_clicker_deeptrain, gaea_clicker_tickettrain, gaea_clicker_alltask]:
         emotion = choose_emotion()
         os.environ['CHOOSE_EMOTION'] = emotion
     asyncio.run(gaea_run_modules(module=module, runname=runname, runeq=runeq, rungt=rungt, runlt=runlt, runthread=runthread))
@@ -167,24 +168,25 @@ def main(runname, runeq, rungt, runlt, runthread):
                 'Choose',
                 choices=[
                     Choice("🚀 Gaea tasks - register",        'gaea_clicker_register',        shortcut_key="r"),
-                    Choice("🚀 Gaea tasks - login   ",        'gaea_clicker_login',           shortcut_key="l"),
+                    Choice("🚀 Gaea tasks - login",           'gaea_clicker_login',           shortcut_key="l"),
                     Choice("🚀 Gaea tasks - session",         'gaea_clicker_session',         shortcut_key="s"),
-                    Choice("🚀 Gaea tasks - earninfo",        'gaea_clicker_earninfo',        shortcut_key="e"),
-                    Choice("🚀 Gaea tasks - godhoodinfo",     'gaea_clicker_godhoodinfo',     shortcut_key="g"),
-                    Choice("🚀 Gaea tasks - era3info",        'gaea_clicker_era3info',        shortcut_key="i"),
-                    Choice("🔥 Gaea tasks - openblindbox",    'gaea_clicker_openblindbox',    shortcut_key="o"),
-                    Choice("🔥 Gaea tasks - referralreword",  'gaea_clicker_referralreword',  shortcut_key="f"),
                     Choice("🔥 Gaea tasks - bindaddress",     'gaea_clicker_bindaddress',     shortcut_key="b"),
+                    Choice("🚀 Gaea tasks - godhoodinfo",     'gaea_clicker_godhoodinfo',     shortcut_key="g"),
                     Choice("🔥 Gaea tasks - godhoodid",       'gaea_clicker_godhoodid',       shortcut_key="h"),
                     Choice("🔥 Gaea tasks - godhoodemotion",  'gaea_clicker_godhoodemotion',  shortcut_key="m"),
+                    Choice("🚀 Gaea tasks - era3info",        'gaea_clicker_era3info',        shortcut_key="i"),
+                    Choice("🚀 Gaea tasks - earninfo",        'gaea_clicker_earninfo',        shortcut_key="e"),
+                    Choice("🔥 Gaea tasks - referralreword",  'gaea_clicker_referralreword',  shortcut_key="f"),
+                    Choice("🔥 Gaea tasks - openblindbox",    'gaea_clicker_openblindbox',    shortcut_key="o"),
                     # Choice("🔥 Gaea daily tasks - checkin   (Once a day)",   'gaea_clicker_checkin',   shortcut_key="1"),
                     # Choice("🔥 Gaea daily tasks - signin    (Once a day)",   'gaea_clicker_signin',    shortcut_key="2"),
                     Choice("🔥 Gaea daily tasks - dailycheckin   (Once a day)",   'gaea_clicker_dailycheckin',   shortcut_key="1"),
                     Choice("🔥 Gaea daily tasks - medalcheckin   (Once a day)",   'gaea_clicker_medalcheckin',   shortcut_key="2"),
-                    Choice("🔥 Gaea daily tasks - aitrain   (Once a day)",   'gaea_clicker_aitrain',   shortcut_key="3"),
-                    Choice("🚀 Gaea daily tasks - deeptrain (Once a Phase)", 'gaea_clicker_deeptrain', shortcut_key="4"),
-                    Choice("🔥 Gaea daily tasks - aicheckin (Once a day)",   'gaea_clicker_aicheckin', shortcut_key="5"),
-                    Choice("🔥 Gaea daily tasks - alltask   (Once a day)",   'gaea_clicker_alltask',   shortcut_key="6"),
+                    Choice("🔥 Gaea daily tasks - aitrain     (Once a day)",   'gaea_clicker_aitrain',     shortcut_key="3"),
+                    Choice("🚀 Gaea daily tasks - deeptrain   (Once a Phase)", 'gaea_clicker_deeptrain',   shortcut_key="4"),
+                    Choice("🚀 Gaea daily tasks - tickettrain (Once a Phase)", 'gaea_clicker_tickettrain', shortcut_key="5"),
+                    Choice("🔥 Gaea daily tasks - aicheckin   (Once a day)",   'gaea_clicker_aicheckin',   shortcut_key="6"),
+                    Choice("🔥 Gaea daily tasks - alltask     (Once a day)",   'gaea_clicker_alltask',     shortcut_key="9"),
                     Choice('❌ Exit', "exit", shortcut_key="0")
                 ],
                 use_shortcuts=True,
@@ -203,14 +205,15 @@ def main(runname, runeq, rungt, runlt, runthread):
 
 async def gaea_daily_task_modules(module, runname, runeq, runthread):
     module_mapping = {
-        gaea_clicker_register:  "launch_clicker_register",
-        gaea_clicker_login:     "launch_clicker_login",
+        gaea_clicker_register:     "launch_clicker_register",
+        gaea_clicker_login:        "launch_clicker_login",
         gaea_clicker_dailycheckin: "launch_clicker_dailycheckin",
         gaea_clicker_medalcheckin: "launch_clicker_medalcheckin",
-        gaea_clicker_aitrain:   "launch_clicker_aitrain",
-        gaea_clicker_deeptrain: "launch_clicker_deeptrain",
-        gaea_clicker_aicheckin: "launch_clicker_aicheckin",
-        gaea_clicker_alltask:   "launch_clicker_alltask",
+        gaea_clicker_aitrain:      "launch_clicker_aitrain",
+        gaea_clicker_deeptrain:    "launch_clicker_deeptrain",
+        gaea_clicker_tickettrain:  "launch_clicker_tickettrain",
+        gaea_clicker_aicheckin:    "launch_clicker_aicheckin",
+        gaea_clicker_alltask:      "launch_clicker_alltask",
     }
     module_name = module_mapping.get(module, "none")
 

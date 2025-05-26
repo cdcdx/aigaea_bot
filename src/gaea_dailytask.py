@@ -683,7 +683,7 @@ class GaeaDailyTask:
     async def godhoodemotion_clicker(self) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_clicker ERROR: Incorrect private key")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
             # -------------------------------------------------------------------------- godhoodid
@@ -701,13 +701,11 @@ class GaeaDailyTask:
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} white_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            # USDC合约地址
-            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
-            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+
             # 购卡合约地址
             invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
             invite_contract = web3_obj.eth.contract(address=invite_address, abi=contract_abi_invite)
-        
+
             # 当前是否购卡
             is_godhoodid = invite_contract.functions.isgodhoodID( sender_address ).call()
             logger.debug(f"is_godhoodid: {is_godhoodid}")
@@ -740,7 +738,7 @@ class GaeaDailyTask:
             code = response.get('code', None)
             if code in [200, 201]:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response}")
-                return response['data']
+                return response
             else:
                 message = response.get('msg', None)
                 if message is None:
@@ -753,6 +751,163 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker except: {error}")
+
+    async def is_deeptrain_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            
+            # -------------------------------------------------------------------------- is_deeptrain
+            web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
+            # 连接rpc节点
+            connected = web3_obj.is_connected()
+            if not connected:
+                logger.error(f"Ooops! Failed to eth.is_connected.")
+                raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} white_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            # 情绪合约地址
+            emotion_address = Web3.to_checksum_address(CONTRACT_EMOTION)
+            if ERA3_ONLINE_STAMP > current_timestamp:
+                emotion_contract = web3_obj.eth.contract(address=emotion_address, abi=contract_abi_emotion)
+            else:
+                emotion_contract = web3_obj.eth.contract(address=emotion_address, abi=contract_abi_emotion2)
+        
+            # 账户余额
+            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
+            # 情绪合约授权金额
+            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, emotion_address).call()
+            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
+
+            # 当期ID
+            current_period_id = emotion_contract.functions.Issue().call()
+            logger.debug(f"current_period_id: {current_period_id}")
+            time.sleep(1)
+            # 当前是否打卡
+            current_emotion = emotion_contract.functions.IssueAddressEmotions(current_period_id, sender_address).call()
+            logger.debug(f"current_emotion: {current_emotion}")
+            time.sleep(1)
+
+            if current_emotion > 0: # 
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Deeptrain already completed | emotion: {current_emotion}")
+                return True
+            return False
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_deeptrain_clicker except: {error}")
+            return False
+
+    async def ticketbox_list_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- ticketbox_list
+            url = GAEA_API.rstrip('/')+'/api/emotion/ticketbox-list'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                datas = response['data']
+                total = response['total']
+                cdkeys = []
+                if total >= 10:
+                    for i in range(10):
+                        cdkeys.append(datas[i]['cdkey'])
+                else:
+                    cdkeys.append(datas[0]['cdkey'])
+                return {'cdkeys': cdkeys}
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker except: {error}")
+
+    async def ticketbox_open_clicker(self, ticket, emotion_detail) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- ticketbox_open
+            url = GAEA_API.rstrip('/')+'/api/emotion/complete'
+            json_data = {
+                "chain_id": 8453,
+                "detail": emotion_detail,
+                "ticket": ticket,
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker except: {error}")
 
     # --------------------------------------------------------------------------
 
@@ -1253,12 +1408,14 @@ class GaeaDailyTask:
             # 当期ID
             current_period_id = emotion_contract.functions.Issue().call()
             logger.debug(f"current_period_id: {current_period_id}")
+            time.sleep(1)
             # 当前是否打卡
             current_emotion = emotion_contract.functions.IssueAddressEmotions(current_period_id, sender_address).call()
             logger.debug(f"current_emotion: {current_emotion}")
+            time.sleep(1)
 
             if current_emotion > 0: # 
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker already completed | emotion: {current_emotion}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Deeptrain already completed | emotion: {current_emotion}")
                 return 'Deeptrain already completed'
 
             # 当期信息
@@ -1298,7 +1455,8 @@ class GaeaDailyTask:
                 logger.info(f"max_fee_per_gas: {max_fee_per_gas} wei")
 
                 # 构建交易 - 情绪合约金额授权
-                transaction = usdc_contract.functions.approve(emotion_address, current_period_price).build_transaction(
+                MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
+                transaction = usdc_contract.functions.approve(emotion_address, MAX_UINT256).build_transaction(
                     {
                         "chainId": WEB3_CHAINID,
                         "from": sender_address,
@@ -1549,6 +1707,10 @@ class GaeaDailyTask:
             if clicker_response is None:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+        
+            if len(cdkeys) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No blindbox")
+                return "ERROR"
             
             delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
@@ -1632,7 +1794,7 @@ class GaeaDailyTask:
             # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
             if clicker_response['eth_address'] is not None and clicker_response['eth_address'] != "":
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The address has been bound")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The address has been bound")
                 return "SUCCESS"
             
             delay = random.randint(10, 20)
@@ -1807,6 +1969,23 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
             
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            if clicker_response['eth_address'] == "":
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bindaddress delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- bindaddress
+                clicker_response = await self.bind_address_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            
             # -------------------------------------------------------------------------- 5 godhoodid
             await self.godhoodid_clicker()
 
@@ -1821,6 +2000,16 @@ class GaeaDailyTask:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
+            
+            # -------------------------------------------------------------------------- godhoodinfo
+            clicker_response = await self.godhoodinfo_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response['mood']}")
+            if clicker_response['mood']:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotion_code: {clicker_response['mood']['emotion_code']}")
+                return "SUCCESS"
             
             # -------------------------------------------------------------------------- godhoodemotion
             clicker_response = await self.godhoodemotion_clicker()
@@ -1864,6 +2053,61 @@ class GaeaDailyTask:
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deeptrain except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_tickettrain(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- ailist
+            clicker_response = await self.ailist_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            if len(clicker_response['today']) > 0:
+                emotion_detail = clicker_response['today']
+                emotion = emotion_detail.split('_')[0]
+            else:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            # -------------------------------------------------------------------------- 5 tickettrain
+            clicker_response =  await self.is_deeptrain_clicker()
+            if clicker_response is False:
+                # await self.deeptrain_clicker(emotion)
+                # -------------------------------------------------------------------------- ticketbox_list
+                clicker_response = await self.ticketbox_list_clicker()
+                cdkeys = clicker_response.get("cdkeys", [])
+                if clicker_response is None:
+                    return "ERROR"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+                
+                if len(cdkeys) == 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
+                    return "ERROR"
+                
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- ticketbox_open
+                clicker_response = await self.ticketbox_open_clicker(cdkeys[0], emotion_detail)
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain except: {error}")
             return f"ERROR: {error}"
 
     @helper
@@ -1989,7 +2233,8 @@ class GaeaDailyTask:
             if clicker_response is None:
                 return "ERROR"
             if len(clicker_response['today']) > 0:
-                emotion = clicker_response['today'].split('_')[0]
+                emotion_detail = clicker_response['today']
+                emotion = emotion_detail.split('_')[0]
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Training already completed")
                 # return "SUCCESS"
             else:

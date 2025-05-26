@@ -11,6 +11,7 @@ from src.functions import (
     gaea_clicker_aitrain,
     gaea_clicker_aicheckin,
     gaea_clicker_deeptrain,
+    gaea_clicker_tickettrain,
     gaea_clicker_alltask
 )
 
@@ -78,6 +79,9 @@ class TaskManager:
 
     async def launch_clicker_deeptrain(self, thread: int, runid: int, module_name: str) -> None:
         await self._launch_task(thread, runid, module_name, gaea_clicker_deeptrain)
+
+    async def launch_clicker_tickettrain(self, thread: int, runid: int, module_name: str) -> None:
+        await self._launch_task(thread, runid, module_name, gaea_clicker_tickettrain)
 
     async def launch_clicker_alltask(self, thread: int, runid: int, module_name: str) -> None:
         await self._launch_task(thread, runid, module_name, gaea_clicker_alltask)
