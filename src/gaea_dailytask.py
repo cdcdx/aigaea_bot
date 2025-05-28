@@ -700,7 +700,7 @@ class GaeaDailyTask:
             # 钱包地址
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} white_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
 
             # 购卡合约地址
             invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
@@ -777,7 +777,7 @@ class GaeaDailyTask:
             # 钱包地址
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} white_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
             # USDC合约地址
             usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
             usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
@@ -1247,7 +1247,7 @@ class GaeaDailyTask:
             # 钱包地址
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} white_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
             # USDC合约地址
             usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
             usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
@@ -1361,7 +1361,7 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_clicker except: {error}")
 
-    async def deeptrain_clicker(self, emotion_int) -> None:
+    async def deeptrain_clicker(self, emotion_int, eth_address) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: Incorrect private key")
@@ -1387,7 +1387,10 @@ class GaeaDailyTask:
             # 钱包地址
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} white_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
             # USDC合约地址
             usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
             usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
@@ -2033,6 +2036,21 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
             
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            eth_address = clicker_response['eth_address']
+            if eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- ailist
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
@@ -2048,7 +2066,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- 5 deeptrain
-            await self.deeptrain_clicker(emotion)
+            await self.deeptrain_clicker(emotion, eth_address)
 
             return "SUCCESS"
         except Exception as error:
@@ -2062,10 +2080,21 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
                 return "ERROR"
             
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            eth_address = clicker_response['eth_address']
+            if eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- ailist
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
@@ -2084,7 +2113,6 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- 5 tickettrain
             clicker_response =  await self.is_deeptrain_clicker()
             if clicker_response is False:
-                # await self.deeptrain_clicker(emotion)
                 # -------------------------------------------------------------------------- ticketbox_list
                 clicker_response = await self.ticketbox_list_clicker()
                 cdkeys = clicker_response.get("cdkeys", [])
@@ -2263,8 +2291,23 @@ class GaeaDailyTask:
 
             # --------------------------------------------------------------------------
             if len(self.client.prikey) in [64,66]:
+                # -------------------------------------------------------------------------- session
+                clicker_response = await self.session_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                
+                # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+                eth_address = clicker_response['eth_address']
+                if eth_address == "":
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                    return "ERROR"
+                
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker delay: {delay} seconds")
+                await asyncio.sleep(delay)
                 # -------------------------------------------------------------------------- 4 deeptrain
-                await self.deeptrain_clicker(emotion)
+                await self.deeptrain_clicker(emotion, eth_address)
 
                 delay = random.randint(60, 90)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deeptrain_clicker delay: {delay} seconds")
