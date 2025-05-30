@@ -1272,7 +1272,7 @@ class GaeaDailyTask:
             logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
 
             # USDC余额不足
-            inviter_price = 20000000 # 20 USDC
+            inviter_price = 12000000 # 12 USDC
             if inviter_price > sender_balance_usdc:
                 logger.error(f"Ooops! Insufficient USDC balance.")
                 return "Insufficient USDC balance."
