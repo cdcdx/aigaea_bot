@@ -1,5 +1,7 @@
 import hashlib
 import json
+import sys
+import os
 
 def sha256(data):
     hash_object = hashlib.sha256()
@@ -8,6 +10,9 @@ def sha256(data):
     return hex_dig
 
 def get_file_content(file_name):
+    if not os.path.exists(file_name):
+        print(f"ERROR: {file_name} file does not exist")
+        sys.exit()
     with open(file_name, 'r') as f:
         data = [line.strip() for line in f.readlines()]
 

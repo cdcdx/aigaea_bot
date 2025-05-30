@@ -143,21 +143,10 @@ def run_module(module, runname, runeq, rungt, runlt, runthread):
     if module in [gaea_clicker_aitrain, gaea_clicker_deeptrain, gaea_clicker_tickettrain, gaea_clicker_alltask]:
         emotion = choose_emotion()
         os.environ['CHOOSE_EMOTION'] = emotion
+        if module in [gaea_clicker_alltask]:
+            task = choose_task()
+            os.environ['CHOOSE_TASK'] = task
     asyncio.run(gaea_run_modules(module=module, runname=runname, runeq=runeq, rungt=rungt, runlt=runlt, runthread=runthread))
-
-def choose_emotion():
-    emotion_choice = select(
-        'Choose Emotion',
-        choices=[
-            Choice("Random",   '0', shortcut_key="0"),
-            Choice("Postive",  '1', shortcut_key="1"),
-            Choice("Neutral",  '2', shortcut_key="2"),
-            Choice("Negative", '3', shortcut_key="3"),
-        ],
-        use_shortcuts=True,
-        use_arrow_keys=True,
-    ).ask()
-    return emotion_choice
 
 def main(runname, runeq, rungt, runlt, runthread):
     try:
@@ -200,6 +189,35 @@ def main(runname, runeq, rungt, runlt, runthread):
     except (KeyboardInterrupt, asyncio.CancelledError, SystemExit) as e:
         cprint(f"\nShutting down due to: {type(e).__name__}", color='light_yellow')
         sys.exit()
+
+# ----------------------------------------------------------------------------------------------------------
+
+def choose_emotion():
+    emotion_choice = select(
+        'Choose Emotion',
+        choices=[
+            Choice("Random",   '0', shortcut_key="0"),
+            Choice("Postive",  '1', shortcut_key="1"),
+            Choice("Neutral",  '2', shortcut_key="2"),
+            Choice("Negative", '3', shortcut_key="3"),
+        ],
+        use_shortcuts=True,
+        use_arrow_keys=True,
+    ).ask()
+    return emotion_choice
+
+def choose_task():
+    task_choice = select(
+        'Choose Task',
+        choices=[
+            Choice("No Train",     '0', shortcut_key="0"),
+            Choice("DeepTrain",    '1', shortcut_key="1"),
+            Choice("TicketTrain",  '2', shortcut_key="2"),
+        ],
+        use_shortcuts=True,
+        use_arrow_keys=True,
+    ).ask()
+    return task_choice
 
 # ----------------------------------------------------------------------------------------------------------
 
@@ -257,21 +275,21 @@ if __name__ == '__main__':
     # 初始化参数
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--auto', type=bool, default=False, action=argparse.BooleanOptionalAction)
+    parser.add_argument('-r', '--run', type=int, default=10)
     parser.add_argument('-d', '--debug', type=bool, default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument('-n', '--name', type=str, default='')
     parser.add_argument('-e', '--equal', type=int, default=0)
     parser.add_argument('-g', '--greater', type=int, default=0)
     parser.add_argument('-l', '--less', type=int, default=0)
-    parser.add_argument('-r', '--run', type=int, default=10)
     parser.add_argument('-t', '--thread', type=int, default=0)
     args = parser.parse_args()
     run_auto = bool(args.auto)
+    run_run = int(args.run)
     run_debug = bool(args.debug)
     run_name = str(args.name)
     run_eq = int(args.equal)
     run_gt = int(args.greater)
     run_lt = int(args.less)
-    run_run = int(args.run)
     run_thread = int(args.thread)
 
     # 日志级别
@@ -289,6 +307,8 @@ if __name__ == '__main__':
     if run_auto:
         emotion = choose_emotion()
         os.environ['CHOOSE_EMOTION'] = emotion
+        task = choose_task()
+        os.environ['CHOOSE_TASK'] = task
 
         if 0 <= run_run <= 23:
             main_task()

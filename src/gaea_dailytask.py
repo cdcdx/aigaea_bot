@@ -449,7 +449,6 @@ class GaeaDailyTask:
                 else:
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker ERROR: {message}")
                     raise Exception(message)
-            
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker except: {error}")
 
@@ -586,7 +585,6 @@ class GaeaDailyTask:
                 else:
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker ERROR: {message}")
                     raise Exception(message)
-            
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker except: {error}")
 
@@ -840,6 +838,9 @@ class GaeaDailyTask:
             if code in [200, 201]:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
                 datas = response['data']
+                if len(datas) == 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker ERROR: No ticket")
+                    return None
                 total = response['total']
                 cdkeys = []
                 if total >= 10:
@@ -1691,7 +1692,7 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3_info clicker_response: {clicker_response}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email.ljust(24)} era3_info clicker_response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_era3info except: {error}")
@@ -1931,7 +1932,8 @@ class GaeaDailyTask:
             if clicker_response is None:
                 return "ERROR"
             if len(clicker_response['today']) > 0:
-                emotion = clicker_response['today'].split('_')[0]
+                emotion_detail = clicker_response['today']
+                emotion = emotion_detail.split('_')[0]
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Training already completed")
                 # return "SUCCESS"
             else:
@@ -2057,7 +2059,8 @@ class GaeaDailyTask:
                 return "ERROR"
             
             if len(clicker_response['today']) > 0:
-                emotion = clicker_response['today'].split('_')[0]
+                emotion_detail = clicker_response['today']
+                emotion = emotion_detail.split('_')[0]
             else:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
                 return "ERROR"
@@ -2115,17 +2118,17 @@ class GaeaDailyTask:
             if clicker_response is False:
                 # -------------------------------------------------------------------------- ticketbox_list
                 clicker_response = await self.ticketbox_list_clicker()
-                cdkeys = clicker_response.get("cdkeys", [])
                 if clicker_response is None:
                     return "ERROR"
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
                 
+                cdkeys = clicker_response.get("cdkeys", [])
                 if len(cdkeys) == 0:
                     logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
                     return "ERROR"
                 
                 delay = random.randint(10, 20)
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain delay: {delay} seconds")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker delay: {delay} seconds")
                 await asyncio.sleep(delay)
                 # -------------------------------------------------------------------------- ticketbox_open
                 clicker_response = await self.ticketbox_open_clicker(cdkeys[0], emotion_detail)
@@ -2133,6 +2136,9 @@ class GaeaDailyTask:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             
+                delay = random.randint(60, 90)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticketbox_open_clicker delay: {delay} seconds")
+                await asyncio.sleep(delay)
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain except: {error}")
@@ -2160,14 +2166,19 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the deeptraining first")
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist: {ailist}")
+            
             today_complete = 0
             for item in ailist:
                 if item['date'] == today:
-                    today_complete = 1 if item['status'] == 2 else 0
-            if today_complete:
+                    today_complete = item.get('status', 0)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist: {ailist} today_complete: {today_complete}")
+            if today_complete == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the deeptraining first")
+                return "ERROR"
+            elif today_complete == 2:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Checkin already completed")
-                # return "SUCCESS"
-            else:
+                return "SUCCESS"
+            elif today_complete == 3:
                 delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
                 await asyncio.sleep(delay)
@@ -2177,7 +2188,7 @@ class GaeaDailyTask:
                     return "ERROR"
                 
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
-            return "SUCCESS"
+                return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aicheckin except: {error}")
             return f"ERROR: {error}"
@@ -2241,6 +2252,8 @@ class GaeaDailyTask:
                 return "ERROR"
             
             # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            eth_address = clicker_response['eth_address']
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medal: {clicker_response['medal']} medal_expired: {((clicker_response['medal_expired']-int(time.time()))/60/60/24 if clicker_response['medal'] else 0):.2f} days")
             delay = random.randint(10, 20)
             await asyncio.sleep(delay)
@@ -2290,30 +2303,63 @@ class GaeaDailyTask:
 
 
             # --------------------------------------------------------------------------
-            if len(self.client.prikey) in [64,66]:
-                # -------------------------------------------------------------------------- session
-                clicker_response = await self.session_clicker()
-                if clicker_response is None:
-                    return "ERROR"
-                
-                # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
-                eth_address = clicker_response['eth_address']
-                if eth_address == "":
-                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
-                    return "ERROR"
-                
-                delay = random.randint(10, 20)
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker delay: {delay} seconds")
-                await asyncio.sleep(delay)
-                # -------------------------------------------------------------------------- 4 deeptrain
-                await self.deeptrain_clicker(emotion, eth_address)
+            if eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            # -------------------------------------------------------------------------- ailist
+            clicker_response = await self.ailist_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            if len(clicker_response['today']) > 0:
+                emotion_detail = clicker_response['today']
+                emotion = emotion_detail.split('_')[0]
+            else:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            # --------------------------------------------------------------------------
+            
+            # -------------------------------------------------------------------------- deeptrain
+            clicker_response =  await self.is_deeptrain_clicker()
+            if clicker_response is False:
+                task=os.environ.get('CHOOSE_TASK', '0')
+                if task == '1':  # deeptrain
+                    # -------------------------------------------------------------------------- 4 deeptrain
+                    if len(self.client.prikey) in [64,66]:
+                        await self.deeptrain_clicker(emotion, eth_address)
 
-                delay = random.randint(60, 90)
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deeptrain_clicker delay: {delay} seconds")
-                await asyncio.sleep(delay)
-
-
+                        delay = random.randint(60, 90)
+                        logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deeptrain_clicker delay: {delay} seconds")
+                        await asyncio.sleep(delay)
+                elif task == '2':  # tickettrain
+                    # -------------------------------------------------------------------------- ticketbox_list
+                    clicker_response = await self.ticketbox_list_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+                    
+                    cdkeys = clicker_response.get("cdkeys", [])
+                    if len(cdkeys) == 0:
+                        logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
+                        return "ERROR"
+                    
+                    delay = random.randint(10, 20)
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker delay: {delay} seconds")
+                    await asyncio.sleep(delay)
+                    # -------------------------------------------------------------------------- ticketbox_open
+                    clicker_response = await self.ticketbox_open_clicker(cdkeys[0], emotion_detail)
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+                    
+                    delay = random.randint(60, 90)
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticketbox_open_clicker delay: {delay} seconds")
+                    await asyncio.sleep(delay)
+            
             today = time.strftime("%d/%m/%Y", time.localtime())
             # -------------------------------------------------------------------------- ailist
             clicker_response = await self.ailist_clicker()
