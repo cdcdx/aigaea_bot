@@ -1373,7 +1373,7 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: Wrong emotion_int: {emotion_int}")
                 raise Exception(f'Wrong emotion_int: {emotion_int}')
             
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker emotion_int: {emotion_int}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker emotion_int: {emotion_int}")
             # -------------------------------------------------------------------------- deeptrain
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
@@ -1570,6 +1570,128 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker except: {error}")
+
+    async def invitereward_clicker(self, eth_address) -> None:
+        try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} invitereward_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} invitereward_clicker eth_address: {eth_address}")
+            # -------------------------------------------------------------------------- invite
+            web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
+            # 连接rpc节点
+            connected = web3_obj.is_connected()
+            if not connected:
+                logger.error(f"Ooops! Failed to eth.is_connected.")
+                raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
+
+            # 购卡合约地址
+            invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
+            invite_contract = web3_obj.eth.contract(address=invite_address, abi=contract_abi_invite)
+
+            # 余额查询
+            invite_sender_usdc = invite_contract.functions.invitereward( sender_address ).call()
+            logger.debug(f"invite_sender_usdc: {invite_sender_usdc}")
+            sender_usdc = web3_obj.from_wei(invite_sender_usdc, 'mwei')
+            logger.debug(f"sender_usdc: {sender_usdc}")
+
+            if sender_usdc > 0: # 
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} sender_usdc: {sender_usdc}")
+            else:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} sender_usdc: {sender_usdc}")
+            # return 'SUCCESS'
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} invitereward_clicker except: {error}")
+
+    async def claimrewards_clicker(self, eth_address) -> None:
+        try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} claimrewards_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} claimrewards_clicker eth_address: {eth_address}")
+            # -------------------------------------------------------------------------- invite
+            web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
+            # 连接rpc节点
+            connected = web3_obj.is_connected()
+            if not connected:
+                logger.error(f"Ooops! Failed to eth.is_connected.")
+                raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
+
+            # 购卡合约地址
+            invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
+            invite_contract = web3_obj.eth.contract(address=invite_address, abi=contract_abi_invite)
+
+            # 余额查询
+            invite_sender_usdc = invite_contract.functions.invitereward( sender_address ).call()
+            logger.debug(f"invite_sender_usdc: {invite_sender_usdc}")
+            sender_usdc = web3_obj.from_wei(invite_sender_usdc, 'mwei')
+            logger.debug(f"sender_usdc: {sender_usdc}")
+
+            if sender_usdc == 0: # 
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} sender_usdc: {sender_usdc}")
+                return 'ERROR'
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} sender_usdc: {sender_usdc}")
+            
+            # 获取当前Gas
+            latest_block = web3_obj.eth.get_block('latest')
+            if latest_block is None:
+                logger.error(f"Ooops! Failed to eth.get_block.")
+                raise Exception("Failed to eth.get_block.")
+            base_fee_per_gas = latest_block['baseFeePerGas']
+            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
+            logger.info(f"base_fee_per_gas: {base_fee_per_gas} wei")
+            logger.info(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+            logger.info(f"max_fee_per_gas: {max_fee_per_gas} wei")
+
+            # 构建交易 - 提现
+            transaction = invite_contract.functions.claimrewards( ).build_transaction(
+                    {
+                        "chainId": WEB3_CHAINID,
+                        "from": sender_address,
+                        "gas": 20000000,  # 最大 Gas 用量
+                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                    }
+                )
+            logger.debug(f"claimrewards transaction: {transaction}")
+
+            # 发送交易
+            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            if tx_success == False:
+                logger.error(f"Ooops! Failed to send_transaction.")
+                raise Exception("Failed to send_transaction.")
+            
+            logger.success(f"The claimrewards transaction was send successfully! - sender_usdc: {sender_usdc}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} claimrewards_clicker except: {error}")
+
 
     # --------------------------------------------------------------------------
 
@@ -1813,6 +1935,79 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_referralreword except: {error}")
             return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_invitereward(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            eth_address = clicker_response['eth_address']
+            if eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            # -------------------------------------------------------------------------- invitereward
+            clicker_response = await self.invitereward_clicker(eth_address)
+            if clicker_response is None:
+                return "ERROR"
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_invitereward except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_claimrewards(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            eth_address = clicker_response['eth_address']
+            if eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            # -------------------------------------------------------------------------- claimrewards
+            clicker_response = await self.claimrewards_clicker(eth_address)
+            if clicker_response is None:
+                return "ERROR"
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_claimrewards except: {error}")
+            return f"ERROR: {error}"
+
 
     @helper
     async def daily_clicker_checkin(self):
