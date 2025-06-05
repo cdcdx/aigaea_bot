@@ -59,7 +59,7 @@ class GaeaDailyTask:
         while attempt < max_retries:
             try:
                 gas_limit = web3_obj.eth.estimate_gas(transaction)
-                logger.info(f"Estimated GasLimit: {gas_limit} units")
+                logger.debug(f"Estimated GasLimit: {gas_limit} units")
                 total_gas_cost = max_fee_per_gas * gas_limit
                 logger.info(f"Total Gas Cost: {total_gas_cost} wei / {total_gas_cost / 10 ** 18} ETH")
                 transaction.update({
@@ -67,7 +67,7 @@ class GaeaDailyTask:
                     "maxFeePerGas": max_fee_per_gas,
                     "maxPriorityFeePerGas": priority_fee_per_gas,
                 })
-                logger.info(f"update transaction: {transaction}")
+                logger.debug(f"update transaction: {transaction}")
                 signed_transaction = web3_obj.eth.account.sign_transaction(transaction, self.client.prikey)
                 logger.debug(f"signed_transaction: {signed_transaction}")
                 try:
@@ -79,7 +79,7 @@ class GaeaDailyTask:
                     logger.info(f"Send transaction, hash: {tx_hash.hex()}")
                     # Waiting for the transaction to complete
                     receipt = web3_obj.eth.wait_for_transaction_receipt(tx_hash)
-                    logger.info(f"Waiting for completion, receipt: {receipt}")
+                    logger.debug(f"Waiting for completion, receipt: {receipt}")
                     tx_bytes = f"0x{tx_hash.hex()}"
                     
                     if receipt["status"] == 1:
@@ -689,7 +689,7 @@ class GaeaDailyTask:
             # 连接rpc节点
             connected = web3_obj.is_connected()
             if not connected:
-                logger.error(f"Ooops! Failed to eth.is_connected.")
+                # logger.error(f"Ooops! Failed to eth.is_connected.")
                 raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
@@ -766,7 +766,7 @@ class GaeaDailyTask:
             # 连接rpc节点
             connected = web3_obj.is_connected()
             if not connected:
-                logger.error(f"Ooops! Failed to eth.is_connected.")
+                # logger.error(f"Ooops! Failed to eth.is_connected.")
                 raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
@@ -1239,7 +1239,7 @@ class GaeaDailyTask:
             # 连接rpc节点
             connected = web3_obj.is_connected()
             if not connected:
-                logger.error(f"Ooops! Failed to eth.is_connected.")
+                # logger.error(f"Ooops! Failed to eth.is_connected.")
                 raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
@@ -1274,7 +1274,8 @@ class GaeaDailyTask:
             # USDC余额不足
             inviter_price = 12000000 # 12 USDC
             if inviter_price > sender_balance_usdc:
-                logger.error(f"Ooops! Insufficient USDC balance.")
+                # logger.error(f"Ooops! Insufficient USDC balance.")
+                raise Exception("Insufficient USDC balance.")
                 return "Insufficient USDC balance."
             
             # 购卡合约USDC授权额度不足
@@ -1290,9 +1291,9 @@ class GaeaDailyTask:
                 base_fee_per_gas = latest_block['baseFeePerGas']
                 priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
                 max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.info(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.info(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.info(f"max_fee_per_gas: {max_fee_per_gas} wei")
+                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
 
                 # 构建交易 - 购卡合约金额授权
                 transaction = usdc_contract.functions.approve(invite_address, inviter_price).build_transaction(
@@ -1323,9 +1324,9 @@ class GaeaDailyTask:
             base_fee_per_gas = latest_block['baseFeePerGas']
             priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
             max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.info(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.info(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.info(f"max_fee_per_gas: {max_fee_per_gas} wei")
+            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
 
             # 构建交易 - 购卡
             referral_addr = random.choice(REFERRAL_ADDRESS) if REFERRAL_ADDRESS else "0x263f8d3722f03b88818389cd6c34c76f17d097a4"
@@ -1379,7 +1380,7 @@ class GaeaDailyTask:
             # 连接rpc节点
             connected = web3_obj.is_connected()
             if not connected:
-                logger.error(f"Ooops! Failed to eth.is_connected.")
+                # logger.error(f"Ooops! Failed to eth.is_connected.")
                 raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
@@ -1438,7 +1439,8 @@ class GaeaDailyTask:
 
             # USDC余额不足
             if current_period_price > sender_balance_usdc:
-                logger.error(f"Ooops! Insufficient USDC balance.")
+                # logger.error(f"Ooops! Insufficient USDC balance.")
+                raise Exception("Insufficient USDC balance.")
                 return "Insufficient USDC balance."
             
             # 情绪合约USDC授权额度不足
@@ -1454,9 +1456,9 @@ class GaeaDailyTask:
                 base_fee_per_gas = latest_block['baseFeePerGas']
                 priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
                 max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.info(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.info(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.info(f"max_fee_per_gas: {max_fee_per_gas} wei")
+                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
 
                 # 构建交易 - 情绪合约金额授权
                 MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
@@ -1488,9 +1490,9 @@ class GaeaDailyTask:
             base_fee_per_gas = latest_block['baseFeePerGas']
             priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
             max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.info(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.info(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.info(f"max_fee_per_gas: {max_fee_per_gas} wei")
+            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
 
             # 构建交易 - 情绪打卡
             if ERA3_ONLINE_STAMP > current_timestamp:
@@ -1583,7 +1585,7 @@ class GaeaDailyTask:
             # 连接rpc节点
             connected = web3_obj.is_connected()
             if not connected:
-                logger.error(f"Ooops! Failed to eth.is_connected.")
+                # logger.error(f"Ooops! Failed to eth.is_connected.")
                 raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
@@ -1627,7 +1629,7 @@ class GaeaDailyTask:
             # 连接rpc节点
             connected = web3_obj.is_connected()
             if not connected:
-                logger.error(f"Ooops! Failed to eth.is_connected.")
+                # logger.error(f"Ooops! Failed to eth.is_connected.")
                 raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
@@ -1664,9 +1666,9 @@ class GaeaDailyTask:
             base_fee_per_gas = latest_block['baseFeePerGas']
             priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
             max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.info(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.info(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.info(f"max_fee_per_gas: {max_fee_per_gas} wei")
+            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
 
             # 构建交易 - 提现
             transaction = invite_contract.functions.claimrewards( ).build_transaction(
