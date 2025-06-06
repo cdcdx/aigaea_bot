@@ -6,7 +6,7 @@ from loguru import logger
 from src.gaea_client import GaeaClient, getheaders, make_request
 from utils.get_capcha_key import TwoCaptcha
 from config import set_envsion, GAEA_API, ERA3_ONLINE_STAMP
-from config import WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_EMOTION, CONTRACT_REWARD
+from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_EMOTION, CONTRACT_REWARD
 
 async def get_captcha_key(client: GaeaClient):
     two_captcha = TwoCaptcha(client)
@@ -28,7 +28,7 @@ def update_web3_config(config):
         set_envsion("CONTRACT_EMOTION", config.get("emotion"), format=False)
         set_envsion("CONTRACT_REWARD", config.get("reword"), format=False)
 
-    WEB3_RPC = config["rpc"]
+    WEB3_RPC = config["rpc"] if WEB3_RPC_FIXED=='' else WEB3_RPC_FIXED
     WEB3_CHAINID = config["chain_id"]
     CONTRACT_USDC = config["usd"]
     CONTRACT_INVITE = config["invite"]

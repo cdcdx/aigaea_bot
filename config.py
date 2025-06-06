@@ -32,6 +32,7 @@ REFERRAL_ADDRESS = get_envsion("REFERRAL_ADDRESS")
 
 ERA3_ONLINE_STAMP=int(os.getenv("ERA3_ONLINE_STAMP", default=1746806400))  # 第3季上线时间  2025-05-10 00:00:00
 
+WEB3_RPC_FIXED=os.getenv("WEB3_RPC_FIXED", default="")
 # contract
 WEB3_RPC=os.getenv("WEB3_RPC", default="https://mainnet.base.org")
 WEB3_CHAINID=int(os.getenv("WEB3_CHAINID", default=8453))
