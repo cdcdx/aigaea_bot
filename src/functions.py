@@ -65,11 +65,23 @@ async def gaea_clicker_invitereward(runname, id, userid, email, passwd, prikey, 
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_invitereward()
 
-async def gaea_clicker_claimrewards(runname, id, userid, email, passwd, prikey, token, proxy):
+async def gaea_clicker_inviteclaimed(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
-        os.system("title gaea-claimrewards")
+        os.system("title gaea-inviteclaimed")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_claimrewards()
+    return await daily_task.daily_clicker_inviteclaimed()
+
+async def gaea_clicker_emotionreward(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-emotionreward")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_emotionreward()
+
+async def gaea_clicker_emotionclaimed(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-emotionclaimed")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_emotionclaimed()
 
 async def gaea_clicker_godhoodid(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
