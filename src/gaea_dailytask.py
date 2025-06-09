@@ -1525,7 +1525,8 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to send_transaction.")
                 raise Exception("Failed to send_transaction.")
             
-            logger.success(f"The emotions transaction was send successfully! - transaction: {transaction}")
+            logger.info(f"The emotions transaction was send successfully! - transaction: {transaction}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain successfully! - emotion: {emotion_int}")
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker except: {error}")
 

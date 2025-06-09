@@ -27,12 +27,17 @@ GAEA_API = os.getenv("GAEA_API", default="https://api.aigaea.net")
 TWO_CAPTCHA_API_URL = os.getenv("TWO_CAPTCHA_API_URL", default="https://api.2captcha.com")
 TWO_CAPTCHA_API_KEY = os.getenv("TWO_CAPTCHA_API_KEY", default="")
 CAPTCHA_KEY = os.getenv("CAPTCHA_KEY", default="")
-REFERRAL_CODE = get_envsion("REFERRAL_CODE")
-REFERRAL_ADDRESS = get_envsion("REFERRAL_ADDRESS")
 
+# ERA3 ONLINE
 ERA3_ONLINE_STAMP=int(os.getenv("ERA3_ONLINE_STAMP", default=1746806400))  # 第3季上线时间  2025-05-10 00:00:00
 
+# REGISTER
+REFERRAL_CODE = get_envsion("REFERRAL_CODE")
+# GODHOODID
+REFERRAL_ADDRESS = get_envsion("REFERRAL_ADDRESS")
+
 # contract
+WEB3_RPC_FIXED=os.getenv("WEB3_RPC_FIXED", default="")
 WEB3_RPC=os.getenv("WEB3_RPC", default="https://mainnet.base.org")
 WEB3_CHAINID=int(os.getenv("WEB3_CHAINID", default=8453))
 CONTRACT_USDC=os.getenv("CONTRACT_USDC", default="0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
