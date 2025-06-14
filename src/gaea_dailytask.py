@@ -2667,7 +2667,7 @@ class GaeaDailyTask:
             if len(clicker_response['today']) > 0:
                 emotion_detail = clicker_response['today']
                 emotion = emotion_detail.split('_')[0]
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Training already completed")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AI Training already completed")
                 # return "SUCCESS"
             else:
                 # -------------------------------------------------------------------------- godhoodinfo
@@ -2718,7 +2718,9 @@ class GaeaDailyTask:
             clicker_response =  await self.is_deeptrain_clicker()
             if clicker_response is False:
                 task=os.environ.get('CHOOSE_TASK', '0')
-                if task == '1':  # deeptrain
+                if task == '0':  # no train
+                    return "SUCCESS"
+                elif task == '1':  # deeptrain
                     # -------------------------------------------------------------------------- 4 deeptrain
                     if len(self.client.prikey) in [64,66]:
                         await self.deeptrain_clicker(emotion, eth_address)
