@@ -192,3 +192,73 @@ contract_abi_invite = [
 		"type": "function"
 	},
 ]
+
+contract_abi_mint = [
+    {
+        "inputs": [
+            {"internalType": "address","name": "addr","type": "address"}
+        ],
+        "name": "getTokenID",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address","name": "addr","type": "address"}
+        ],
+        "name": "getTokenLevel",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256","name": "tokenId","type": "uint256"}
+        ],
+        "name": "getTokenIDAddr",
+        "outputs": [
+            {"internalType": "address","name": "","type": "address"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256","name": "tokenId","type": "uint256"}
+        ],
+        "name": "getTokenIDLevel",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256","name": "_level","type": "uint256"},
+            {"internalType": "uint256","name": "_number","type": "uint256"},
+            {"internalType": "bytes","name": "_finalhash","type": "bytes"}
+        ],
+        "name": "mintNFT",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256","name": "_tokenId","type": "uint256"},
+            {"internalType": "uint256","name": "_level","type": "uint256"},
+            {"internalType": "uint256","name": "_number","type": "uint256"},
+            {"internalType": "bytes","name": "_finalhash","type": "bytes"}
+        ],
+        "name": "upgradeNFT",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]

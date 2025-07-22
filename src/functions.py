@@ -83,6 +83,18 @@ async def gaea_clicker_emotionclaimed(runname, id, userid, email, passwd, prikey
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_emotionclaimed()
 
+async def gaea_clicker_mintnft(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-mintnft")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_mintnft()
+
+# async def gaea_clicker_upgradenft(runname, id, userid, email, passwd, prikey, token, proxy):
+#     if platform.system().lower() == 'windows':
+#         os.system("title gaea-upgradenft")
+#     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+#     return await daily_task.daily_clicker_upgradenft()
+
 async def gaea_clicker_godhoodid(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-godhoodid")

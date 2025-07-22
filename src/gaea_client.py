@@ -41,7 +41,7 @@ class GaeaClient:
 
         logger.debug(f"id: {id} userid: {userid} email: {email} proxy: {proxy}")
         if len(self.proxy_init) > 0:
-            self.session = ClientSession(connector=ProxyConnector.from_url(self.proxy_init, ssl=ssl.create_default_context(), verify_ssl=True))
+            self.session = ClientSession(connector=ProxyConnector.from_url(self.proxy_init, ssl=ssl.create_default_context(), verify_ssl=False))
         else:
             self.session = ClientSession()
         self.session.headers.update({

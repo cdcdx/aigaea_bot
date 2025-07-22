@@ -15,12 +15,12 @@ from web3 import Web3
 from eth_account.messages import encode_defunct
 
 from src.gaea_client import GaeaClient
-from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_reward, contract_abi_invite
+from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_reward, contract_abi_invite, contract_abi_mint
 from utils.decorators import helper
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
 from utils.services import get_captcha_key
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP
-from config import WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_REWARD, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS
+from config import WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_REWARD, CONTRACT_MINTNFT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS
 
 class GaeaDailyTask:
     def __init__(self, client: GaeaClient) -> None:
@@ -810,6 +810,47 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_deeptrain_clicker except: {error}")
             return False
 
+    async def is_mintnft_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            
+            # -------------------------------------------------------------------------- is_mintnft
+            web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
+            # 连接rpc节点
+            connected = web3_obj.is_connected()
+            if not connected:
+                # logger.error(f"Ooops! Failed to eth.is_connected.")
+                raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            # NFT合约地址
+            mintnft_address = Web3.to_checksum_address(CONTRACT_MINTNFT)
+            mintnft_contract = web3_obj.eth.contract(address=mintnft_address, abi=contract_abi_mint)
+        
+            # 当前NFT等级
+            current_nftlevel = mintnft_contract.functions.getTokenLevel(sender_address).call()
+            logger.debug(f"current_nftlevel: {current_nftlevel}")
+            time.sleep(1)
+
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_mintnft already completed | current_nftlevel: {current_nftlevel}")
+            return current_nftlevel
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_mintnft_clicker except: {error}")
+            return 0
+
     async def ticketbox_list_clicker(self) -> None:
         try:
             headers = self.getheaders()
@@ -1199,6 +1240,88 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             # -------------------------------------------------------------------------- ailist
             url = GAEA_API.rstrip('/')+'/api/ai/list'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers,
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker except: {error}")
+
+    async def calculate_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- calculate
+            url = GAEA_API.rstrip('/')+'/api/nft/calculate'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers,
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker except: {error}")
+
+    async def generate_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- generate
+            url = GAEA_API.rstrip('/')+'/api/nft/generate'
 
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker url: {url}")
             response = await self.client.make_request(
@@ -1816,6 +1939,92 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} inviteclaimed_clicker except: {error}")
 
+    async def mintnft_clicker(self, eth_address, nft_level,block_number,final_hash) -> None:
+        try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} mintnft_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} mintnft_clicker eth_address: {eth_address}")
+            # -------------------------------------------------------------------------- mintnft
+            web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
+            # 连接rpc节点
+            connected = web3_obj.is_connected()
+            if not connected:
+                # logger.error(f"Ooops! Failed to eth.is_connected.")
+                raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            if sender_balance_eth == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
+                return "ERRRO"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
+
+            # NFT铸造合约地址
+            mintnft_address = Web3.to_checksum_address(CONTRACT_MINTNFT)
+            mintnft_contract = web3_obj.eth.contract(address=mintnft_address, abi=contract_abi_mint)
+
+            # 等级查询
+            mintnft_id = mintnft_contract.functions.getTokenID( sender_address ).call()
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} mintnft_id: {mintnft_id}")
+            
+            # 获取当前Gas
+            latest_block = web3_obj.eth.get_block('latest')
+            if latest_block is None:
+                logger.error(f"Ooops! Failed to eth.get_block.")
+                raise Exception("Failed to eth.get_block.")
+            base_fee_per_gas = latest_block['baseFeePerGas']
+            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
+            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
+
+            # 构建交易 - 铸造
+            if mintnft_id==0:
+                transaction = mintnft_contract.functions.mintNFT(nft_level,block_number,final_hash).build_transaction(
+                        {
+                            "chainId": WEB3_CHAINID,
+                            "from": sender_address,
+                            "gas": 20000000,  # 最大 Gas 用量
+                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                        }
+                    )
+                logger.debug(f"mintNFT transaction: {transaction}")
+            else:
+                transaction = mintnft_contract.functions.upgradeNFT(mintnft_id, nft_level,block_number,final_hash).build_transaction(
+                        {
+                            "chainId": WEB3_CHAINID,
+                            "from": sender_address,
+                            "gas": 20000000,  # 最大 Gas 用量
+                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                        }
+                    )
+                logger.debug(f"upgradeNFT transaction: {transaction}")
+
+            # 发送交易
+            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            if tx_success == False:
+                logger.error(f"Ooops! Failed to send_transaction.")
+                raise Exception("Failed to send_transaction.")
+            
+            logger.success(f"The { 'mintNFT' if mintnft_id==0 else 'upgradeNFT' } transaction was send successfully! - mintnft_id: {mintnft_id} nft_level: {nft_level}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} mintnft_clicker except: {error}")
+
 
     # --------------------------------------------------------------------------
 
@@ -2204,6 +2413,82 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_emotionclaimed except: {error}")
             return f"ERROR: {error}"
 
+    @helper
+    async def daily_clicker_mintnft(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            eth_address = clicker_response['eth_address']
+            if eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
+            # -------------------------------------------------------------------------- calculate
+            clicker_response = await self.calculate_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")  # {'nft_score': 19880, 'nft_level': 4, 'nft_role': 'Soul Genesis IV'}
+            current_level = clicker_response['nft_level']
+            if current_level == 0: # 无效等级
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_level: {current_level} | Insufficient level.")
+                return "ERROR"
+            # elif current_level == 4:
+            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_level: {current_level} | Maximum level.")
+            #     return "SUCCESS"
+            
+            # -------------------------------------------------------------------------- mintnft
+            nftlevel =  await self.is_mintnft_clicker()
+            if nftlevel == 4: # 已铸造,最大等级,不可升级
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftlevel: {nftlevel} | No need to upgrade to the maximum level.")
+                return "SUCCESS"
+            elif nftlevel == current_level: # 已铸造,无效升级
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftlevel: {nftlevel} | No need to upgrade if at the same level.")
+                return "SUCCESS"
+            elif nftlevel==0 or (nftlevel>0 and nftlevel < current_level): # 可铸造 or 已铸造,可升级
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftlevel: {nftlevel} | Upgrade to the next level.")
+                # -------------------------------------------------------------------------- generate
+                clicker_response = await self.generate_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")  # {'nft_level': 3, 'block_number': 33203269, 'final_hash': '0x46fcb058ce'}
+                if len(self.client.prikey) in [64,66]:
+                    nft_level = clicker_response['nft_level']
+                    block_number = clicker_response['block_number']
+                    final_hash = clicker_response['final_hash']
+                    # -------------------------------------------------------------------------- mintnft
+                    await self.mintnft_clicker(eth_address, nft_level,block_number,final_hash)
+
+                    delay = random.randint(60, 90)
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} mintnft_clicker delay: {delay} seconds")
+                    await asyncio.sleep(delay)
+            else:
+                raise Exception("nftlevel error")
+                
+            # delay = random.randint(10, 20)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            # await asyncio.sleep(delay)
+
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_emotionclaimed except: {error}")
+            return f"ERROR: {error}"
 
     @helper
     async def daily_clicker_checkin(self):
