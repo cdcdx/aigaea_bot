@@ -50,7 +50,7 @@ class TaskManager:
                 result = await task_function(self.runname, id, userid, email, passwd, prikey, token, proxy)
                 if str(result).find("ERROR") > -1:
                     logger.error(f"thread: {thread} id: {id} userid: {userid} email: {email} {module_name} result: {result}")
-                    break
+                    continue
                 else:
                     logger.success(f"thread: {thread} id: {id} userid: {userid} email: {email} {module_name} result: {result}")
 

@@ -20,7 +20,7 @@ from src.functions import (
     gaea_clicker_referralreword, gaea_clicker_openblindbox, 
     gaea_clicker_invitereward, gaea_clicker_inviteclaimed,
     gaea_clicker_emotionreward, gaea_clicker_emotionclaimed,
-    gaea_clicker_mintnft, gaea_clicker_nftinfo, #gaea_clicker_upgradenft,
+    gaea_clicker_mintnft, gaea_clicker_nftinfo, gaea_clicker_nftoblate,
     gaea_clicker_checkin, gaea_clicker_signin,
     gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, 
     gaea_clicker_aitrain, gaea_clicker_deeptrain, gaea_clicker_tickettrain, gaea_clicker_aicheckin,
@@ -50,6 +50,7 @@ MODULE_MAPPING = {
     'gaea_clicker_emotionclaimed': gaea_clicker_emotionclaimed,
     'gaea_clicker_mintnft':        gaea_clicker_mintnft,
     'gaea_clicker_nftinfo':        gaea_clicker_nftinfo,
+    'gaea_clicker_nftoblate':      gaea_clicker_nftoblate,
     # 'gaea_clicker_upgradenft':     gaea_clicker_upgradenft,
     # 'gaea_clicker_checkin':    gaea_clicker_checkin,
     # 'gaea_clicker_signin':     gaea_clicker_signin,
@@ -186,6 +187,7 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🔥 Gaea tasks - emotionclaimed",  'gaea_clicker_emotionclaimed',  shortcut_key="q"),
                     Choice("🔥 Gaea tasks - mintNFT",         'gaea_clicker_mintnft',         shortcut_key="t"),
                     Choice("🔥 Gaea tasks - nftinfo",         'gaea_clicker_nftinfo',         shortcut_key="v"),
+                    Choice("🔥 Gaea tasks - nftoblate",       'gaea_clicker_nftoblate',     shortcut_key="w"),
                     # Choice("🔥 Gaea tasks - upgradeNFT",      'gaea_clicker_upgradenft',      shortcut_key="v"),
                     # Choice("🔥 Gaea daily tasks - checkin   (Once a day)",   'gaea_clicker_checkin',   shortcut_key="1"),
                     # Choice("🔥 Gaea daily tasks - signin    (Once a day)",   'gaea_clicker_signin',    shortcut_key="2"),
@@ -280,12 +282,21 @@ def daily_task_module():
     logger.info("Execute alltask scheduled task...")
     asyncio.run(gaea_daily_task_modules(module=gaea_clicker_alltask, runname=run_name, runeq=run_eq, runthread=run_thread))
 
-def main_task():
+def main_task(run_hour: int):
     # 获取当前时间
     current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logger.info(f"current_time: {current_time}")
+    # # 设置定时任务
+    # task_time = f"{str(run_run).zfill(2)}:{str(random.randint(0, 59)).zfill(2)}"
+    # logger.info(f"The scheduled task will start at {task_time} every day ...")
+    # schedule.every().day.at(task_time).do(daily_task_module)
     # 设置定时任务
-    task_time = f"{str(run_run).zfill(2)}:{str(random.randint(0, 59)).zfill(2)}"
+    if run_hour==0:
+        run_hour = datetime.datetime.now().hour
+        run_minute = datetime.datetime.now().minute
+        task_time = f"{str(run_hour).zfill(2)}:{str(random.randint(run_minute, 59)).zfill(2)}"
+    else:
+        task_time = f"{str(run_hour).zfill(2)}:{str(random.randint(0, 59)).zfill(2)}"
     logger.info(f"The scheduled task will start at {task_time} every day ...")
     schedule.every().day.at(task_time).do(daily_task_module)
 
@@ -295,7 +306,7 @@ if __name__ == '__main__':
     # 初始化参数
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--auto', type=bool, default=False, action=argparse.BooleanOptionalAction)
-    parser.add_argument('-r', '--run', type=int, default=10)
+    parser.add_argument('-r', '--run', type=int, default=0)
     parser.add_argument('-d', '--debug', type=bool, default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument('-n', '--name', type=str, default='')
     parser.add_argument('-e', '--equal', type=int, default=0)
@@ -331,7 +342,7 @@ if __name__ == '__main__':
         os.environ['CHOOSE_TASK'] = task
 
         if 0 <= run_run <= 23:
-            main_task()
+            main_task(run_run)
         else:
             logger.error(f"Invalid parameter, run: {run_run} must be between 0 and 23.")
             sys.exit(1)

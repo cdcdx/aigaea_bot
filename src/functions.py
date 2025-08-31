@@ -95,6 +95,14 @@ async def gaea_clicker_nftinfo(runname, id, userid, email, passwd, prikey, token
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_nftinfo()
 
+
+async def gaea_clicker_nftoblate(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-mintnft")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_nftoblate()
+
+
 # async def gaea_clicker_upgradenft(runname, id, userid, email, passwd, prikey, token, proxy):
 #     if platform.system().lower() == 'windows':
 #         os.system("title gaea-upgradenft")
