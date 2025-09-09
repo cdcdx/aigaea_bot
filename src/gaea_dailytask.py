@@ -1798,11 +1798,14 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker except: {error}")
 
-    async def deepchoice_clicker(self, choice_int, soul_int, eth_address) -> None:
+    async def deepchoice_clicker(self, choice_detail, eth_address) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
+            
+            choice_int = choice_detail.split('_')[0]
+            soul_int = choice_detail.split('_')[0]
             
             choice_int = int(choice_int)
             if choice_int not in [1,2,3,4]:
@@ -3339,7 +3342,7 @@ class GaeaDailyTask:
                 choice = random.choice(["1", "2", "3", "4"])
             choice_detail=f"{choice}_{delay}_{is_godhood_id}"
             # -------------------------------------------------------------------------- 5 deepchoice
-            await self.deepchoice_clicker(choice, delay, eth_address)
+            await self.deepchoice_clicker(choice_detail, eth_address)
 
             return "SUCCESS"
         except Exception as error:
@@ -3545,7 +3548,7 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- deeptrain
             clicker_response =  await self.is_deeptrain_clicker()
             if clicker_response is False:
-                task=os.environ.get('CHOOSE_TASK', '0')
+                task=os.environ.get('TASK_EMOTION', '0')
                 if task == '0':  # no train
                     return "SUCCESS"
                 elif task == '1':  # deeptrain
@@ -3615,6 +3618,58 @@ class GaeaDailyTask:
 
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
 
+            # -------------------------------------------------------------------------- godhoodinfo
+            clicker_response = await self.godhoodinfo_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            is_godhood_id = "1" if clicker_response['mood'] else "0"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            choice=os.environ.get('CHOOSE_CHOICE', '0')
+            if choice == '0':
+                choice = random.choice(["1", "2", "3", "4"])
+            choice_detail=f"{choice}_{delay}_{is_godhood_id}"
+            # -------------------------------------------------------------------------- deepchoice
+            clicker_response =  await self.is_deepchoice_clicker()
+            if clicker_response is False:
+                task=os.environ.get('TASK_CHOICE', '0')
+                if task == '0':  # no train
+                    return "SUCCESS"
+                elif task == '1':  # deepchoice
+                    # -------------------------------------------------------------------------- 4 deepchoice
+                    if len(self.client.prikey) in [64,66]:
+                        await self.deepchoice_clicker(choice_detail, eth_address)
+
+                        delay = random.randint(60, 90)
+                        logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deepchoice_clicker delay: {delay} seconds")
+                        await asyncio.sleep(delay)
+                elif task == '2':  # ticketchoice
+                    # -------------------------------------------------------------------------- ticketbox_list
+                    clicker_response = await self.ticketbox_list_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+                    
+                    cdkeys = clicker_response.get("cdkeys", [])
+                    if len(cdkeys) == 0:
+                        logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
+                        return "ERROR"
+                    
+                    delay = random.randint(10, 20)
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker delay: {delay} seconds")
+                    await asyncio.sleep(delay)
+                    # -------------------------------------------------------------------------- ticketbox_open
+                    clicker_response = await self.ticket_deepchoice_clicker(cdkeys[0], choice_detail)
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+                    
+                    delay = random.randint(60, 90)
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deepchoice_clicker delay: {delay} seconds")
+                    await asyncio.sleep(delay)
+            
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aicheckin except: {error}")
