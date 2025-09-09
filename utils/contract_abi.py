@@ -262,3 +262,61 @@ contract_abi_mint = [
         "type": "function"
     }
 ]
+
+contract_abi_choice = [
+    {
+		"inputs": [
+			{ "internalType": "address", "name": "_addr", "type": "address" },
+			{ "internalType": "uint8", "name": "_option", "type": "uint8" },
+			{ "internalType": "uint256", "name": "_soulCount", "type": "uint256" }
+		],
+		"name": "bet",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "_addr", "type": "address" }
+		],
+		"name": "isBet",
+		"outputs": [
+			{ "internalType": "bool", "name": "", "type": "bool" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "uint256", "name": "", "type": "uint256" },
+			{ "internalType": "uint256", "name": "", "type": "uint256" },
+			{ "internalType": "address", "name": "", "type": "address" }
+		],
+		"name": "userBets",
+		"outputs": [
+			{ "internalType": "uint8", "name": "option", "type": "uint8" },
+			{ "internalType": "uint256", "name": "soulCount", "type": "uint256" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getBaseInfo",
+		"outputs": [
+			{ "internalType": "uint256", "name": "epoch", "type": "uint256" },
+			{ "internalType": "uint256", "name": "epochBaseUSD", "type": "uint256" },
+			{ "internalType": "uint256", "name": "epochBaseBox", "type": "uint256" },
+			{ "internalType": "uint256", "name": "phase", "type": "uint256" },
+			{ "internalType": "uint256", "name": "phaseBaseSoul", "type": "uint256" },
+			{ "internalType": "uint256", "name": "phaseBetPrice", "type": "uint256" },
+			{ "internalType": "uint256", "name": "phaseEndStamp", "type": "uint256" },
+			{ "internalType": "uint256", "name": "phaseDuration", "type": "uint256" },
+			{ "internalType": "uint256", "name": "phasePoolUSD", "type": "uint256" },
+			{ "internalType": "enum DeepChoice.PhaseStatus", "name": "phaseStatus", "type": "uint8" },
+			{ "internalType": "uint256", "name": "simulation", "type": "uint256" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+]

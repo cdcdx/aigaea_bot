@@ -38,6 +38,8 @@ def update_web3_config(config):
     else:
         CONTRACT_EMOTION = config["emotion"]
         CONTRACT_REWARD = config["reword"]
+    set_envsion("CONTRACT_CHOICE", config.get("choice2"), format=False)
+    set_envsion("CONTRACT_AWARD", config.get("award2"), format=False)
     logger.info(f"update_web3_config CHAINID: {WEB3_CHAINID} RPC: {WEB3_RPC} INVITE: {CONTRACT_INVITE} EMOTION: {CONTRACT_EMOTION} REWARD: {CONTRACT_REWARD} USDC: {CONTRACT_USDC}")
 
 async def get_web3_config():

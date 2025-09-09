@@ -15,12 +15,12 @@ from web3 import Web3
 from eth_account.messages import encode_defunct
 
 from src.gaea_client import GaeaClient
-from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_reward, contract_abi_invite, contract_abi_mint
+from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_reward, contract_abi_invite, contract_abi_mint, contract_abi_choice
 from utils.decorators import helper
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
 from utils.services import get_captcha_key
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP
-from config import WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_REWARD, CONTRACT_MINTNFT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS
+from config import WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_MINTNFT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS
 
 class GaeaDailyTask:
     def __init__(self, client: GaeaClient) -> None:
@@ -810,6 +810,59 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_deeptrain_clicker except: {error}")
             return False
 
+    async def is_deepchoice_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            
+            # -------------------------------------------------------------------------- is_deeptrain
+            web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
+            # 连接rpc节点
+            connected = web3_obj.is_connected()
+            if not connected:
+                # logger.error(f"Ooops! Failed to eth.is_connected.")
+                raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            # 情绪合约地址
+            choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
+            choice_contract = web3_obj.eth.contract(address=choice_address, abi=contract_abi_choice)
+        
+            # 账户余额
+            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
+            # 情绪合约授权金额
+            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, choice_address).call()
+            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
+
+            # 当前是否打卡
+            current_choice = choice_contract.functions.isBet(sender_address).call()
+            logger.debug(f"current_choice: {current_choice}")
+            time.sleep(1)
+
+            if current_choice > 0: # 
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice already completed | choice: {current_choice}")
+                return True
+            return False
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_deepchoice_clicker except: {error}")
+            return False
+
     async def is_mintnft_clicker(self) -> None:
         try:
             headers = self.getheaders()
@@ -903,7 +956,7 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker except: {error}")
 
-    async def ticketbox_open_clicker(self, ticket, emotion_detail) -> None:
+    async def ticket_deeptrain_clicker(self, ticket, emotion_detail) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -921,8 +974,8 @@ class GaeaDailyTask:
                 "ticket": ticket,
             }
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker url: {url}")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker json_data: {json_data}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker json_data: {json_data}")
             response = await self.client.make_request(
                 method='POST', 
                 url=url, 
@@ -930,9 +983,9 @@ class GaeaDailyTask:
                 json=json_data
             )
             if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker {response}")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker {response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -943,13 +996,61 @@ class GaeaDailyTask:
                 if message is None:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker => {message}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker => {message}")
                     return message
                 else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker ERROR: {message}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_open_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker except: {error}")
+
+    async def ticket_deepchoice_clicker(self, ticket, choice_detail) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- ticketbox_open
+            url = GAEA_API.rstrip('/')+'/api/choice/complete'
+            json_data = {
+                "chain_id": 8453,
+                "detail": choice_detail,
+                "ticket": ticket,
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker except: {error}")
 
     # --------------------------------------------------------------------------
 
@@ -1696,6 +1797,157 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aicheckin_clicker except: {error}")
+
+    async def deepchoice_clicker(self, choice_int, soul_int, eth_address) -> None:
+        try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            choice_int = int(choice_int)
+            if choice_int not in [1,2,3,4]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker ERROR: Wrong choice_int: {choice_int}")
+                raise Exception(f'Wrong choice_int: {choice_int}')
+            
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker choice_int: {choice_int}")
+            # -------------------------------------------------------------------------- deepchoice
+            web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
+            # 连接rpc节点
+            connected = web3_obj.is_connected()
+            if not connected:
+                # logger.error(f"Ooops! Failed to eth.is_connected.")
+                raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            # 抉择合约地址
+            choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
+            choice_contract = web3_obj.eth.contract(address=choice_address, abi=contract_abi_choice)
+        
+            # 账户余额
+            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
+            # 情绪合约授权金额
+            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, choice_address).call()
+            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
+
+            # 当前是否打卡
+            current_choice = choice_contract.functions.isBet(sender_address).call()
+            logger.debug(f"current_choice: {current_choice}")
+            time.sleep(1)
+
+            if current_choice > 0: # 
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice already completed | choice: {current_choice}")
+                return 'Deepchoice already completed'
+
+            # 当期信息
+            current_period_info = choice_contract.functions.getBaseInfo().call()
+            logger.debug(f"current_period_info: {current_period_info}")
+            current_epoch_id = current_period_info[0]
+            current_phase_id = current_period_info[3]
+            current_period_id = (int(current_epoch_id)-1)*3 + int(current_phase_id) if current_epoch_id>0 else 0  # 当期ID
+            current_period_price = current_period_info[5]  # 当期单价
+            logger.debug(f"current_period_price: {current_period_price}")
+            end_timestamp = current_period_info[6]  # 当期结束时间戳
+            logger.debug(f"end_timestamp: {end_timestamp}")
+            # 时间已结束
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+            if end_timestamp < current_timestamp:
+                logger.info(f"The {current_period_id} period is over.")
+                return f"The {current_period_id} period is over."
+
+            # USDC余额不足
+            if current_period_price > sender_balance_usdc:
+                # logger.error(f"Ooops! Insufficient USDC balance.")
+                raise Exception("Insufficient USDC balance.")
+                return "Insufficient USDC balance."
+            
+            # 情绪合约USDC授权额度不足
+            if current_period_price > sender_allowance_usdc:
+                logger.error(f"Ooops! Insufficient USDC authorization amount for choice_contract.")
+                # raise Exception("Insufficient USDC authorization amount for choice_contract.")
+
+                # 获取当前Gas
+                latest_block = web3_obj.eth.get_block('latest')
+                if latest_block is None:
+                    logger.error(f"Ooops! Failed to eth.get_block.")
+                    raise Exception("Failed to eth.get_block.")
+                base_fee_per_gas = latest_block['baseFeePerGas']
+                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
+                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
+
+                # 构建交易 - 情绪合约金额授权
+                MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
+                transaction = usdc_contract.functions.approve(choice_address, MAX_UINT256).build_transaction(
+                    {
+                        "chainId": WEB3_CHAINID,
+                        "from": sender_address,
+                        "gas": 20000000,  # 最大 Gas 用量
+                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                    }
+                )
+                logger.debug(f"approve transaction: {transaction}")
+
+                # 发送交易
+                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                if tx_success == False:
+                    logger.error(f"Ooops! Failed to send_transaction.")
+                    raise Exception("Failed to send_transaction.")
+                
+                logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
+
+            # 获取当前Gas
+            latest_block = web3_obj.eth.get_block('latest')
+            if latest_block is None:
+                logger.error(f"Ooops! Failed to eth.get_block.")
+                raise Exception("Failed to eth.get_block.")
+            base_fee_per_gas = latest_block['baseFeePerGas']
+            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
+            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
+
+            # 构建交易 - 情绪打卡
+            transaction = choice_contract.functions.bet( sender_address, choice_int, soul_int ).build_transaction(
+                    {
+                        "chainId": WEB3_CHAINID,
+                        "from": sender_address,
+                        "gas": 20000000,  # 最大 Gas 用量
+                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                    }
+                )
+            logger.debug(f"choices transaction: {transaction}")
+
+            # 发送交易
+            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            if tx_success == False:
+                logger.error(f"Ooops! Failed to send_transaction.")
+                raise Exception("Failed to send_transaction.")
+            
+            logger.info(f"The choices transaction was send successfully! - transaction: {transaction}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice successfully! - choice: {choice_int}")
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker except: {error}")
 
     async def invitereward_clicker(self, eth_address) -> None:
         try:
@@ -2905,7 +3157,7 @@ class GaeaDailyTask:
                 return "ERROR"
             
             delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain delay: {delay} seconds")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deeptrain_ticket delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- ailist
             clicker_response = await self.ailist_clicker()
@@ -2931,7 +3183,7 @@ class GaeaDailyTask:
             return f"ERROR: {error}"
 
     @helper
-    async def daily_clicker_tickettrain(self):
+    async def daily_clicker_deeptrain_ticket(self):
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
@@ -2950,7 +3202,7 @@ class GaeaDailyTask:
                 return "ERROR"
             
             delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain delay: {delay} seconds")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deeptrain_ticket delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- ailist
             clicker_response = await self.ailist_clicker()
@@ -2965,7 +3217,7 @@ class GaeaDailyTask:
                 return "ERROR"
             
             delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain delay: {delay} seconds")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deeptrain_ticket delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- 5 tickettrain
             clicker_response =  await self.is_deeptrain_clicker()
@@ -2985,17 +3237,17 @@ class GaeaDailyTask:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker delay: {delay} seconds")
                 await asyncio.sleep(delay)
                 # -------------------------------------------------------------------------- ticketbox_open
-                clicker_response = await self.ticketbox_open_clicker(cdkeys[0], emotion_detail)
+                clicker_response = await self.ticket_deeptrain_clicker(cdkeys[0], emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             
                 delay = random.randint(60, 90)
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticketbox_open_clicker delay: {delay} seconds")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain_clicker delay: {delay} seconds")
                 await asyncio.sleep(delay)
             return "SUCCESS"
         except Exception as error:
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_tickettrain except: {error}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deeptrain_ticket except: {error}")
             return f"ERROR: {error}"
 
     @helper
@@ -3045,6 +3297,119 @@ class GaeaDailyTask:
                 return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aicheckin except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_deepchoice(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            eth_address = clicker_response['eth_address']
+            if eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice_ticket delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            # -------------------------------------------------------------------------- godhoodinfo
+            clicker_response = await self.godhoodinfo_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            is_godhood_id = "1" if clicker_response['mood'] else "0"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            choice=os.environ.get('CHOOSE_CHOICE', '0')
+            if choice == '0':
+                choice = random.choice(["1", "2", "3", "4"])
+            choice_detail=f"{choice}_{delay}_{is_godhood_id}"
+            # -------------------------------------------------------------------------- 5 deepchoice
+            await self.deepchoice_clicker(choice, delay, eth_address)
+
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_deepchoice_ticket(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            eth_address = clicker_response['eth_address']
+            if eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice_ticket delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            # -------------------------------------------------------------------------- 5 tickettrain
+            clicker_response =  await self.is_deepchoice_clicker()
+            if clicker_response is False:
+                # -------------------------------------------------------------------------- ticketbox_list
+                clicker_response = await self.ticketbox_list_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+                
+                cdkeys = clicker_response.get("cdkeys", [])
+                if len(cdkeys) == 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
+                    return "ERROR"
+                
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- godhoodinfo
+                clicker_response = await self.godhoodinfo_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                is_godhood_id = "1" if clicker_response['mood'] else "0"
+                
+                delay = random.randint(10, 20)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                choice=os.environ.get('CHOOSE_CHOICE', '0')
+                if choice == '0':
+                    choice = random.choice(["1", "2", "3", "4"])
+                choice_detail=f"{choice}_{delay}_{is_godhood_id}"
+                # -------------------------------------------------------------------------- ticketbox_open
+                clicker_response = await self.ticket_deepchoice_clicker(cdkeys[0], choice_detail)
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            
+                delay = random.randint(60, 90)
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain_clicker delay: {delay} seconds")
+                await asyncio.sleep(delay)
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice_ticket except: {error}")
             return f"ERROR: {error}"
 
     @helper
@@ -3207,13 +3572,13 @@ class GaeaDailyTask:
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker delay: {delay} seconds")
                     await asyncio.sleep(delay)
                     # -------------------------------------------------------------------------- ticketbox_open
-                    clicker_response = await self.ticketbox_open_clicker(cdkeys[0], emotion_detail)
+                    clicker_response = await self.ticket_deeptrain_clicker(cdkeys[0], emotion_detail)
                     if clicker_response is None:
                         return "ERROR"
                     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
                     
                     delay = random.randint(60, 90)
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticketbox_open_clicker delay: {delay} seconds")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain_clicker delay: {delay} seconds")
                     await asyncio.sleep(delay)
             
             today = time.strftime("%d/%m/%Y", time.localtime())

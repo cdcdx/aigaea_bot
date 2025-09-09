@@ -163,11 +163,23 @@ async def gaea_clicker_deeptrain(runname, id, userid, email, passwd, prikey, tok
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_deeptrain()
 
-async def gaea_clicker_tickettrain(runname, id, userid, email, passwd, prikey, token, proxy):
+async def gaea_clicker_deeptrain_ticket(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-tickettrain")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_tickettrain()
+    return await daily_task.daily_clicker_deeptrain_ticket()
+
+async def gaea_clicker_deepchoice(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-deepchoice")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_deepchoice()
+
+async def gaea_clicker_deepchoice_ticket(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-ticketchoice")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_deepchoice_ticket()
 
 async def gaea_clicker_alltask(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':

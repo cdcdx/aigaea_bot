@@ -23,7 +23,9 @@ from src.functions import (
     gaea_clicker_mintnft, gaea_clicker_nftinfo, gaea_clicker_nftoblate,
     gaea_clicker_checkin, gaea_clicker_signin,
     gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, 
-    gaea_clicker_aitrain, gaea_clicker_deeptrain, gaea_clicker_tickettrain, gaea_clicker_aicheckin,
+    gaea_clicker_aitrain, gaea_clicker_aicheckin,
+    gaea_clicker_deeptrain, gaea_clicker_deeptrain_ticket, 
+    gaea_clicker_deepchoice, gaea_clicker_deepchoice_ticket, 
     gaea_clicker_alltask
 )
 from src.gaea_client import GaeaClient
@@ -58,7 +60,9 @@ MODULE_MAPPING = {
     'gaea_clicker_medalcheckin': gaea_clicker_medalcheckin,
     'gaea_clicker_aitrain':      gaea_clicker_aitrain,
     'gaea_clicker_deeptrain':    gaea_clicker_deeptrain,
-    'gaea_clicker_tickettrain':  gaea_clicker_tickettrain,
+    'gaea_clicker_deeptrain_ticket':  gaea_clicker_deeptrain_ticket,
+    'gaea_clicker_deepchoice':    gaea_clicker_deepchoice,
+    'gaea_clicker_deepchoice_ticket':  gaea_clicker_deepchoice_ticket,
     'gaea_clicker_aicheckin':    gaea_clicker_aicheckin,
     'gaea_clicker_alltask':      gaea_clicker_alltask,
 }
@@ -154,12 +158,19 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
         logger.error(f"Error occurred while running tasks: {e}")
 
 def run_module(module, runname, runeq, rungt, runlt, runthread):
-    if module in [gaea_clicker_aitrain, gaea_clicker_deeptrain, gaea_clicker_tickettrain, gaea_clicker_alltask]:
+    if module in [gaea_clicker_aitrain, gaea_clicker_deeptrain, gaea_clicker_deeptrain_ticket, gaea_clicker_alltask]:
         emotion = choose_emotion()
         os.environ['CHOOSE_EMOTION'] = emotion
         if module in [gaea_clicker_alltask]:
-            task = choose_task()
-            os.environ['CHOOSE_TASK'] = task
+            task_emotion = choose_task_emotion()
+            os.environ['TASK_EMOTION'] = task_emotion
+    
+    if module in [gaea_clicker_deepchoice, gaea_clicker_deepchoice_ticket, gaea_clicker_alltask]:
+        choice = choose_choice()
+        os.environ['CHOOSE_CHOICE'] = choice
+        if module in [gaea_clicker_alltask]:
+            task_choice = choose_task_choice()
+            os.environ['TASK_CHOICE'] = task_choice
     asyncio.run(gaea_run_modules(module=module, runname=runname, runeq=runeq, rungt=rungt, runlt=runlt, runthread=runthread))
 
 def main(runname, runeq, rungt, runlt, runthread):
@@ -193,11 +204,13 @@ def main(runname, runeq, rungt, runlt, runthread):
                     # Choice("🔥 Gaea daily tasks - signin    (Once a day)",   'gaea_clicker_signin',    shortcut_key="2"),
                     Choice("🔥 Gaea daily tasks - dailycheckin   (Once a day)",   'gaea_clicker_dailycheckin',   shortcut_key="1"),
                     Choice("🔥 Gaea daily tasks - medalcheckin   (Once a day)",   'gaea_clicker_medalcheckin',   shortcut_key="2"),
-                    Choice("🔥 Gaea daily tasks - aitrain     (Once a day)",   'gaea_clicker_aitrain',     shortcut_key="3"),
-                    Choice("🚀 Gaea daily tasks - deeptrain   (Once a Phase)", 'gaea_clicker_deeptrain',   shortcut_key="4"),
-                    Choice("🚀 Gaea daily tasks - tickettrain (Once a Phase)", 'gaea_clicker_tickettrain', shortcut_key="5"),
-                    Choice("🔥 Gaea daily tasks - aicheckin   (Once a day)",   'gaea_clicker_aicheckin',   shortcut_key="6"),
-                    Choice("🔥 Gaea daily tasks - alltask     (Once a day)",   'gaea_clicker_alltask',     shortcut_key="9"),
+                    Choice("🔥 Gaea daily tasks - aitrain        (Once a day)",   'gaea_clicker_aitrain',     shortcut_key="3"),
+                    Choice("🚀 Gaea daily tasks - deeptrain      (Once a Phase)", 'gaea_clicker_deeptrain',   shortcut_key="4"),
+                    Choice("🚀 Gaea daily tasks - tickettrain    (Once a Phase)", 'gaea_clicker_deeptrain_ticket', shortcut_key="5"),
+                    Choice("🔥 Gaea daily tasks - aicheckin      (Once a day)",   'gaea_clicker_aicheckin',   shortcut_key="6"),
+                    Choice("🚀 Gaea daily tasks - deepchoice     (Once a Phase)", 'gaea_clicker_deepchoice',   shortcut_key="7"),
+                    Choice("🚀 Gaea daily tasks - ticketchoice   (Once a Phase)", 'gaea_clicker_deepchoice_ticket', shortcut_key="8"),
+                    Choice("🔥 Gaea daily tasks - alltask        (Once a day)",   'gaea_clicker_alltask',     shortcut_key="9"),
                     Choice('❌ Exit', "exit", shortcut_key="0")
                 ],
                 use_shortcuts=True,
@@ -215,7 +228,7 @@ def main(runname, runeq, rungt, runlt, runthread):
 # ----------------------------------------------------------------------------------------------------------
 
 def choose_emotion():
-    emotion_choice = select(
+    emotion_int = select(
         'Choose Emotion',
         choices=[
             Choice("Random",   '0', shortcut_key="0"),
@@ -226,15 +239,43 @@ def choose_emotion():
         use_shortcuts=True,
         use_arrow_keys=True,
     ).ask()
-    return emotion_choice
+    return emotion_int
 
-def choose_task():
+def choose_task_emotion():
     task_choice = select(
         'Choose Task',
         choices=[
             Choice("No Train",     '0', shortcut_key="0"),
             Choice("DeepTrain",    '1', shortcut_key="1"),
             Choice("TicketTrain",  '2', shortcut_key="2"),
+        ],
+        use_shortcuts=True,
+        use_arrow_keys=True,
+    ).ask()
+    return task_choice
+
+def choose_choice():
+    choice_int = select(
+        'Choose Choice',
+        choices=[
+            Choice("Random",      '0', shortcut_key="0"),
+            Choice("Safeguarding",'1', shortcut_key="1"),
+            Choice("Balancing",   '2', shortcut_key="2"),
+            Choice("Advancing",   '3', shortcut_key="3"),
+            Choice("Leaping",     '4', shortcut_key="4"),
+        ],
+        use_shortcuts=True,
+        use_arrow_keys=True,
+    ).ask()
+    return choice_int
+
+def choose_task_choice():
+    task_choice = select(
+        'Choose Task',
+        choices=[
+            Choice("No Choice",    '0', shortcut_key="0"),
+            Choice("DeepChoice",   '1', shortcut_key="1"),
+            Choice("TicketChoice", '2', shortcut_key="2"),
         ],
         use_shortcuts=True,
         use_arrow_keys=True,
@@ -251,7 +292,9 @@ async def gaea_daily_task_modules(module, runname, runeq, runthread):
         gaea_clicker_medalcheckin: "launch_clicker_medalcheckin",
         gaea_clicker_aitrain:      "launch_clicker_aitrain",
         gaea_clicker_deeptrain:    "launch_clicker_deeptrain",
-        gaea_clicker_tickettrain:  "launch_clicker_tickettrain",
+        gaea_clicker_deeptrain_ticket:  "launch_clicker_deeptrain_ticket",
+        gaea_clicker_deepchoice:    "launch_clicker_deepchoice",
+        gaea_clicker_deepchoice_ticket:  "launch_clicker_deepchoice_ticket",
         gaea_clicker_aicheckin:    "launch_clicker_aicheckin",
         gaea_clicker_alltask:      "launch_clicker_alltask",
     }
@@ -338,8 +381,13 @@ if __name__ == '__main__':
     if run_auto:
         emotion = choose_emotion()
         os.environ['CHOOSE_EMOTION'] = emotion
-        task = choose_task()
-        os.environ['CHOOSE_TASK'] = task
+        task_emotion = choose_task_emotion()
+        os.environ['TASK_EMOTION'] = task_emotion
+
+        choice = choose_choice()
+        os.environ['CHOOSE_CHOICE'] = choice
+        task_choice = choose_task_choice()
+        os.environ['TASK_CHOICE'] = task_choice
 
         if 0 <= run_run <= 23:
             main_task(run_run)
