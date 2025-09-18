@@ -152,6 +152,27 @@ contract_abi_reward = [
     },
 ]
 
+contract_abi_award = [
+    {
+        "inputs": [
+            { "internalType": "address", "name": "_addr", "type": "address" }
+        ],
+        "name": "getRewards",
+        "outputs": [
+            { "internalType": "uint256", "name": "", "type": "uint256" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "claim",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+]
+
 contract_abi_invite = [
 	{
 		"inputs": [
