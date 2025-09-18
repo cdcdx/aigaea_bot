@@ -3326,7 +3326,7 @@ class GaeaDailyTask:
                 return "ERROR"
             
             delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice_ticket delay: {delay} seconds")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- godhoodinfo
             clicker_response = await self.godhoodinfo_clicker()
@@ -3334,8 +3334,8 @@ class GaeaDailyTask:
                 return "ERROR"
             is_godhood_id = "1" if clicker_response['mood'] else "0"
             
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            delay = random.randint(20, 40) * 2
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice delay: {delay} seconds")
             await asyncio.sleep(delay)
             choice=os.environ.get('CHOOSE_CHOICE', '0')
             if choice == '0':
@@ -3394,8 +3394,8 @@ class GaeaDailyTask:
                     return "ERROR"
                 is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
-                delay = random.randint(10, 20)
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+                delay = random.randint(20, 40) * 2
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker delay: {delay} seconds")
                 await asyncio.sleep(delay)
                 choice=os.environ.get('CHOOSE_CHOICE', '0')
                 if choice == '0':
@@ -3624,8 +3624,8 @@ class GaeaDailyTask:
                 return "ERROR"
             is_godhood_id = "1" if clicker_response['mood'] else "0"
             
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain delay: {delay} seconds")
+            delay = random.randint(20, 40) * 2
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_deepchoice_clicker delay: {delay} seconds")
             await asyncio.sleep(delay)
             choice=os.environ.get('CHOOSE_CHOICE', '0')
             if choice == '0':
