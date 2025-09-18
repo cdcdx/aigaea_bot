@@ -15,12 +15,12 @@ from web3 import Web3
 from eth_account.messages import encode_defunct
 
 from src.gaea_client import GaeaClient
-from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_reward, contract_abi_award, contract_abi_invite, contract_abi_mint, contract_abi_choice
+from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_reward, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award
 from utils.decorators import helper
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
 from utils.services import get_captcha_key
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP
-from config import WEB3_RPC, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_MINTNFT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS
+from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_MINTNFT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS
 
 class GaeaDailyTask:
     def __init__(self, client: GaeaClient) -> None:
@@ -687,10 +687,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- godhoodid
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -764,10 +766,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- is_deeptrain
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -824,10 +828,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- is_deeptrain
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -877,10 +883,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- is_mintnft
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1461,10 +1469,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- godhoodid
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1602,10 +1612,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- deeptrain
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1816,10 +1828,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- deepchoice
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1962,10 +1976,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- invite
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2006,10 +2022,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- invite
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2083,10 +2101,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- Reward
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2127,10 +2147,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- Reward
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2204,10 +2226,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- Reward
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2225,15 +2249,15 @@ class GaeaDailyTask:
             award_contract = web3_obj.eth.contract(address=award_address, abi=contract_abi_award)
 
             # 余额查询
-            reward_sender_usdc = award_contract.functions.getRewards( sender_address ).call()
-            logger.debug(f"reward_sender_usdc: {reward_sender_usdc}")
-            reward_usdc = web3_obj.from_wei(reward_sender_usdc, 'mwei')
-            logger.debug(f"reward_usdc: {reward_usdc}")
+            award_sender_usdc = award_contract.functions.getRewards( sender_address ).call()
+            logger.debug(f"award_sender_usdc: {award_sender_usdc}")
+            award_usdc = web3_obj.from_wei(award_sender_usdc, 'mwei')
+            logger.debug(f"award_usdc: {award_usdc}")
 
-            if reward_usdc > 0: # 
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} reward_usdc: {reward_usdc}")
+            if award_usdc > 0: # 
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} award_usdc: {award_usdc}")
             else:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} reward_usdc: {reward_usdc}")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} award_usdc: {award_usdc}")
             # return 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} invitereward_clicker except: {error}")
@@ -2248,10 +2272,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- Reward
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2269,15 +2295,15 @@ class GaeaDailyTask:
             award_contract = web3_obj.eth.contract(address=award_address, abi=contract_abi_award)
 
             # 余额查询
-            reward_sender_usdc = award_contract.functions.getRewards( sender_address ).call()
-            logger.debug(f"reward_sender_usdc: {reward_sender_usdc}")
-            reward_usdc = web3_obj.from_wei(reward_sender_usdc, 'mwei')
-            logger.debug(f"reward_usdc: {reward_usdc}")
+            award_sender_usdc = award_contract.functions.getRewards( sender_address ).call()
+            logger.debug(f"award_sender_usdc: {award_sender_usdc}")
+            award_usdc = web3_obj.from_wei(award_sender_usdc, 'mwei')
+            logger.debug(f"award_usdc: {award_usdc}")
 
-            if reward_usdc == 0: # 
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} reward_usdc: {reward_usdc}")
+            if award_usdc == 0: # 
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} award_usdc: {award_usdc}")
                 return 'ERROR'
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} reward_usdc: {reward_usdc}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} award_usdc: {award_usdc}")
             
             # 获取当前Gas
             latest_block = web3_obj.eth.get_block('latest')
@@ -2310,7 +2336,7 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to send_transaction.")
                 raise Exception("Failed to send_transaction.")
             
-            logger.success(f"The claim transaction was send successfully! - reward_usdc: {reward_usdc}")
+            logger.success(f"The claim transaction was send successfully! - award_usdc: {award_usdc}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} inviteclaimed_clicker except: {error}")
@@ -2325,10 +2351,12 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- mintnft
             web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
             # 连接rpc节点
-            connected = web3_obj.is_connected()
-            if not connected:
-                # logger.error(f"Ooops! Failed to eth.is_connected.")
-                raise Exception("Failed to eth.is_connected.")
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
