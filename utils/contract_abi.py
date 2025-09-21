@@ -286,6 +286,27 @@ contract_abi_choice = [
 		"stateMutability": "view",
 		"type": "function"
 	},
+    {
+        "inputs": [],
+        "name": "currentEpoch",
+        "outputs": [
+            { "internalType": "uint256", "name": "", "type": "uint256" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            { "internalType": "uint256", "name": "_epoch", "type": "uint256" }
+        ],
+        "name": "getEpochBetResults",
+        "outputs": [
+            { "internalType": "uint8[3]", "name": "mainstreams", "type": "uint8[3]" },
+            { "internalType": "uint8[3]", "name": "eliminateds", "type": "uint8[3]" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
 	{
 		"inputs": [
 			{ "internalType": "uint256", "name": "", "type": "uint256" },

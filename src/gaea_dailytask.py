@@ -780,9 +780,6 @@ class GaeaDailyTask:
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            # USDC合约地址
-            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
-            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
             # 情绪合约地址
             emotion_address = Web3.to_checksum_address(CONTRACT_EMOTION)
             if ERA3_ONLINE_STAMP > current_timestamp:
@@ -790,13 +787,6 @@ class GaeaDailyTask:
             else:
                 emotion_contract = web3_obj.eth.contract(address=emotion_address, abi=contract_abi_emotion2)
         
-            # 账户余额
-            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
-            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
-            # 情绪合约授权金额
-            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, emotion_address).call()
-            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
-
             # 当期ID
             current_period_id = emotion_contract.functions.Issue().call()
             logger.debug(f"current_period_id: {current_period_id}")
@@ -842,19 +832,9 @@ class GaeaDailyTask:
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            # USDC合约地址
-            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
-            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
             # 情绪合约地址
             choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
             choice_contract = web3_obj.eth.contract(address=choice_address, abi=contract_abi_choice)
-        
-            # 账户余额
-            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
-            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
-            # 情绪合约授权金额
-            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, choice_address).call()
-            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
 
             # 当前是否打卡
             current_choice = choice_contract.functions.isBet(sender_address).call()
@@ -868,6 +848,50 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_deepchoice_clicker except: {error}")
             return False
+
+    async def deepchoice_list_clicker(self) -> None:
+        remainingOptions = [1,2,3,4]
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            
+            # -------------------------------------------------------------------------- deepchoice_list
+            web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
+            # 连接rpc节点
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
+            
+            # 情绪合约地址
+            choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
+            choice_contract = web3_obj.eth.contract(address=choice_address, abi=contract_abi_choice)
+            # 查询当前epoch
+            epoch_id = choice_contract.functions.currentEpoch().call()
+            # 查询投注结果: mainstreams/eliminateds
+            results_info = choice_contract.functions.getEpochBetResults(epoch_id).call()
+            logger.debug(f"results_info: {results_info}")
+            mainstreams = results_info[0]  # 各选项投注人数
+            eliminateds = results_info[1]  # 各选项投注Soul数
+            logger.debug(f"mainstreams: {mainstreams} eliminateds: {eliminateds}")
+            # 当前可用选项
+            for eliminated in eliminateds:
+                if eliminated != 0:
+                    remainingOptions.remove(eliminated)
+            logger.debug(f"remainingOptions: {remainingOptions}")
+            
+            return remainingOptions
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_list_clicker except: {error}")
+            return remainingOptions
 
     async def is_mintnft_clicker(self) -> None:
         try:
@@ -3549,21 +3573,28 @@ class GaeaDailyTask:
             delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice delay: {delay} seconds")
             await asyncio.sleep(delay)
-            # -------------------------------------------------------------------------- godhoodinfo
-            clicker_response = await self.godhoodinfo_clicker()
-            if clicker_response is None:
-                return "ERROR"
-            is_godhood_id = "1" if clicker_response['mood'] else "0"
-            
-            delay = random.randint(20, 40) * 2
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice delay: {delay} seconds")
-            await asyncio.sleep(delay)
-            choice=os.environ.get('CHOOSE_CHOICE', '0')
-            if choice == '0':
-                choice = random.choice(["1", "2", "3", "4"])
-            choice_detail=f"{choice}_{delay}_{is_godhood_id}"
-            # -------------------------------------------------------------------------- 5 deepchoice
-            await self.deepchoice_clicker(choice_detail, eth_address)
+            # -------------------------------------------------------------------------- 5 tickettrain
+            clicker_response =  await self.is_deepchoice_clicker()
+            if clicker_response is False:
+                # -------------------------------------------------------------------------- godhoodinfo
+                clicker_response = await self.godhoodinfo_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                is_godhood_id = "1" if clicker_response['mood'] else "0"
+                
+                delay = random.randint(20, 40) * 2
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                choice=os.environ.get('CHOOSE_CHOICE', '0')
+                if choice == '0':
+                    # choice = random.choice(["1", "2", "3", "4"])
+                    options = await self.deepchoice_list_clicker()
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice options: {options}")
+                    choice = random.choice(options)
+                choice_detail=f"{choice}_{delay}_{is_godhood_id}"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
+                # -------------------------------------------------------------------------- 5 deepchoice
+                await self.deepchoice_clicker(choice_detail, eth_address)
 
             return "SUCCESS"
         except Exception as error:
@@ -3620,8 +3651,13 @@ class GaeaDailyTask:
                 await asyncio.sleep(delay)
                 choice=os.environ.get('CHOOSE_CHOICE', '0')
                 if choice == '0':
-                    choice = random.choice(["1", "2", "3", "4"])
+                    # choice = random.choice(["1", "2", "3", "4"])
+                    options = await self.deepchoice_list_clicker()
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker options: {options}")
+                    choice = random.choice(options)
                 choice_detail=f"{choice}_{delay}_{is_godhood_id}"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
+            
                 # -------------------------------------------------------------------------- ticketbox_open
                 clicker_response = await self.ticket_deepchoice_clicker(cdkeys[0], choice_detail)
                 if clicker_response is None:
@@ -3846,12 +3882,16 @@ class GaeaDailyTask:
             is_godhood_id = "1" if clicker_response['mood'] else "0"
             
             delay = random.randint(20, 40) * 2
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_deepchoice_clicker delay: {delay} seconds")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice delay: {delay} seconds")
             await asyncio.sleep(delay)
             choice=os.environ.get('CHOOSE_CHOICE', '0')
             if choice == '0':
-                choice = random.choice(["1", "2", "3", "4"])
+                # choice = random.choice(["1", "2", "3", "4"])
+                options = await self.deepchoice_list_clicker()
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice options: {options}")
+                choice = random.choice(options)
             choice_detail=f"{choice}_{delay}_{is_godhood_id}"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
             # -------------------------------------------------------------------------- deepchoice
             clicker_response =  await self.is_deepchoice_clicker()
             if clicker_response is False:
