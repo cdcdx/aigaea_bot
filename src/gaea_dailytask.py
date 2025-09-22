@@ -1621,6 +1621,47 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_clicker except: {error}")
 
+    async def godhoodgrowthinfo_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- godhoodgrowthinfo
+            url = GAEA_API.rstrip('/')+'/api/godhood/growth/info'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers,
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker except: {error}")
+
     async def deeptrain_clicker(self, emotion_int, eth_address) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
@@ -3167,7 +3208,6 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_emotionclaimed except: {error}")
             return f"ERROR: {error}"
 
-
     @helper
     async def daily_clicker_checkin(self):
         try:
@@ -3351,6 +3391,21 @@ class GaeaDailyTask:
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodid except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_godhoodgrowthinfo(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- godhoodgrowthinfo
+            godhoodgrowthinfo =  await self.godhoodgrowthinfo_clicker()
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo: {godhoodgrowthinfo}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_emotionclaimed except: {error}")
             return f"ERROR: {error}"
 
     @helper
