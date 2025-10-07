@@ -101,25 +101,43 @@ async def gaea_clicker_choiceclaimed(runname, id, userid, email, passwd, prikey,
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_choiceclaimed()
 
-async def gaea_clicker_mintnft(runname, id, userid, email, passwd, prikey, token, proxy):
+async def gaea_clicker_snftmint(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
-        os.system("title gaea-mintnft")
+        os.system("title gaea-snftmint")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_mintnft()
+    return await daily_task.daily_clicker_snftmint()
 
-async def gaea_clicker_nftinfo(runname, id, userid, email, passwd, prikey, token, proxy):
+async def gaea_clicker_snftinfo(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
-        os.system("title gaea-nftinfo")
+        os.system("title gaea-snftinfo")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_nftinfo()
+    return await daily_task.daily_clicker_snftinfo()
 
 
-async def gaea_clicker_nftoblate(runname, id, userid, email, passwd, prikey, token, proxy):
+async def gaea_clicker_snftoblate(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
-        os.system("title gaea-nftoblate")
+        os.system("title gaea-snftoblate")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_nftoblate()
+    return await daily_task.daily_clicker_snftoblate()
 
+async def gaea_clicker_anftmint(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-anftmint")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_anftmint()
+
+async def gaea_clicker_anftinfo(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-anftinfo")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_anftinfo()
+
+
+async def gaea_clicker_anftoblate(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-anftoblate")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_anftoblate()
 
 # async def gaea_clicker_upgradenft(runname, id, userid, email, passwd, prikey, token, proxy):
 #     if platform.system().lower() == 'windows':

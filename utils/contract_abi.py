@@ -218,6 +218,17 @@ contract_abi_mint = [
     },
     {
         "inputs": [
+            {"internalType": "address","name": "addr","type": "address"}
+        ],
+        "name": "getTokenTicket",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
             {"internalType": "uint256","name": "tokenId","type": "uint256"}
         ],
         "name": "getTokenIDAddr",
@@ -232,6 +243,17 @@ contract_abi_mint = [
             {"internalType": "uint256","name": "tokenId","type": "uint256"}
         ],
         "name": "getTokenIDLevel",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256","name": "tokenId","type": "uint256"}
+        ],
+        "name": "getTokenIDTicket",
         "outputs": [
             {"internalType": "uint256","name": "","type": "uint256"}
         ],

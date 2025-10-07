@@ -21,6 +21,9 @@ def update_web3_config(config):
     set_envsion("WEB3_CHAINID", str(config.get("chain_id")), format=False)
     set_envsion("CONTRACT_USDC", config.get("usd"), format=False)
     set_envsion("CONTRACT_INVITE", config.get("invite"), format=False)
+    set_envsion("CONTRACT_SNFTMINT", config.get("snftmint"), format=False)
+    set_envsion("CONTRACT_ANFTMINT", config.get("anftmint"), format=False)
+    
     if ERA3_ONLINE_STAMP < current_timestamp and "emotion2" in config:
         set_envsion("CONTRACT_EMOTION", config.get("emotion2"), format=False)
         set_envsion("CONTRACT_REWARD", config.get("reward2"), format=False)
