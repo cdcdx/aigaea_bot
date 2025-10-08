@@ -1006,7 +1006,8 @@ class GaeaDailyTask:
             # 钱包地址
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - eth: {web3_obj.from_wei(sender_balance_eth, 'ether')}")
             # USDC合约地址
             usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
             usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
@@ -1027,7 +1028,7 @@ class GaeaDailyTask:
             # USDC账户余额
             sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
             logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {sender_balance_usdc}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {web3_obj.from_wei(sender_balance_usdc, 'mwei')}")
             time.sleep(1)
             if 1000000 < sender_balance_usdc and pooling_addr != '': # 大于1开始归集USDC
                 # 获取当前Gas
@@ -1065,7 +1066,7 @@ class GaeaDailyTask:
             # SXP账户余额
             sender_balance_sxp = sxp_contract.functions.balanceOf(sender_address).call()
             logger.debug(f"sender_balance_sxp: {sender_balance_sxp}")
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - sxp: {sender_balance_sxp}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - sxp: {web3_obj.from_wei(sender_balance_sxp, 'mwei')}")
             time.sleep(1)
             if 100000000 < sender_balance_sxp and pooling_addr != '': # 大于100开始归集SXP
                 # 获取当前Gas
@@ -3784,6 +3785,7 @@ class GaeaDailyTask:
             
             # -------------------------------------------------------------------------- funds_pooling
             clicker_response = await self.funds_pooling_clicker()
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling_clicker clicker_response: {clicker_response}")
 
             return "SUCCESS"
         except Exception as error:
