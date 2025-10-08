@@ -1017,16 +1017,19 @@ class GaeaDailyTask:
             # 归集地址选择
             pooling_addr = random.choice(POOLING_ADDRESS) if POOLING_ADDRESS else ''
             if pooling_addr == '' or len(pooling_addr) != 42:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Incorrect pooling address")
-                raise Exception(f"Incorrect pooling address")
-            pooling_address = Web3.to_checksum_address(pooling_addr)
+                # logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Incorrect pooling address")
+                # raise Exception(f"Incorrect pooling address")
+                pooling_address = ''
+            else:
+                pooling_address = Web3.to_checksum_address(pooling_addr)
             logger.debug(f"pooling_address: {pooling_address}")
             
             # USDC账户余额
             sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
             logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {sender_balance_usdc}")
             time.sleep(1)
-            if 1000000 < sender_balance_usdc: # 大于1开始归集USDC
+            if 1000000 < sender_balance_usdc and pooling_addr != '': # 大于1开始归集USDC
                 # 获取当前Gas
                 latest_block = web3_obj.eth.get_block('latest')
                 if latest_block is None:
@@ -1062,8 +1065,9 @@ class GaeaDailyTask:
             # SXP账户余额
             sender_balance_sxp = sxp_contract.functions.balanceOf(sender_address).call()
             logger.debug(f"sender_balance_sxp: {sender_balance_sxp}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - sxp: {sender_balance_sxp}")
             time.sleep(1)
-            if 100000000 < sender_balance_sxp: # 大于100开始归集SXP
+            if 100000000 < sender_balance_sxp and pooling_addr != '': # 大于100开始归集SXP
                 # 获取当前Gas
                 latest_block = web3_obj.eth.get_block('latest')
                 if latest_block is None:
@@ -3778,15 +3782,8 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling_clicker delay: {delay} seconds")
             await asyncio.sleep(delay)
             
-            # -------------------------------------------------------------------------- generate
+            # -------------------------------------------------------------------------- funds_pooling
             clicker_response = await self.funds_pooling_clicker()
-            if clicker_response is None:
-                return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
-            
-            # delay = random.randint(10, 20)
-            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_fundspooling delay: {delay} seconds")
-            # await asyncio.sleep(delay)
 
             return "SUCCESS"
         except Exception as error:
