@@ -113,7 +113,6 @@ async def gaea_clicker_snftinfo(runname, id, userid, email, passwd, prikey, toke
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_snftinfo()
 
-
 async def gaea_clicker_snftoblate(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-snftoblate")
@@ -132,18 +131,17 @@ async def gaea_clicker_anftinfo(runname, id, userid, email, passwd, prikey, toke
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_anftinfo()
 
-
 async def gaea_clicker_anftoblate(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-anftoblate")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_anftoblate()
 
-# async def gaea_clicker_upgradenft(runname, id, userid, email, passwd, prikey, token, proxy):
-#     if platform.system().lower() == 'windows':
-#         os.system("title gaea-upgradenft")
-#     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-#     return await daily_task.daily_clicker_upgradenft()
+async def gaea_clicker_fundspooling(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-fundspooling")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_fundspooling()
 
 async def gaea_clicker_godhoodid(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':

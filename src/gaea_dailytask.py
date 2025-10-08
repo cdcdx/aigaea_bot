@@ -20,7 +20,7 @@ from utils.decorators import helper
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
 from utils.services import get_captcha_key
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP
-from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS
+from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS, POOLING_ADDRESS
 
 class GaeaDailyTask:
     def __init__(self, client: GaeaClient) -> None:
@@ -977,6 +977,128 @@ class GaeaDailyTask:
             return current_nftticket
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft_ismint_clicker except: {error}")
+            return 0
+
+    async def funds_pooling_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            
+            # -------------------------------------------------------------------------- balanceOf
+            web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC))
+            # 连接rpc节点
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {WEB3_RPC}")
+                web3_obj = Web3(Web3.HTTPProvider(WEB3_RPC_FIXED))
+                if not web3_obj.is_connected():
+                    logger.error(f"Unable to connect to the network: {WEB3_RPC_FIXED}")
+                    raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            # SXP合约地址
+            sxp_address = Web3.to_checksum_address(CONTRACT_SXP)
+            sxp_contract = web3_obj.eth.contract(address=sxp_address, abi=contract_abi_usdc)
+
+            # 归集地址选择
+            pooling_addr = random.choice(POOLING_ADDRESS) if POOLING_ADDRESS else ''
+            if pooling_addr == '' or len(pooling_addr) != 42:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Incorrect pooling address")
+                raise Exception(f"Incorrect pooling address")
+            pooling_address = Web3.to_checksum_address(pooling_addr)
+            logger.debug(f"pooling_address: {pooling_address}")
+            
+            # USDC账户余额
+            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
+            time.sleep(1)
+            if 1000000 < sender_balance_usdc: # 大于1开始归集USDC
+                # 获取当前Gas
+                latest_block = web3_obj.eth.get_block('latest')
+                if latest_block is None:
+                    logger.error(f"Ooops! Failed to eth.get_block.")
+                    raise Exception("Failed to eth.get_block.")
+                base_fee_per_gas = latest_block['baseFeePerGas']
+                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
+                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
+
+                # 构建交易 - 转账
+                transaction = usdc_contract.functions.transfer(pooling_address, sender_balance_usdc).build_transaction(
+                        {
+                            "chainId": WEB3_CHAINID,
+                            "from": sender_address,
+                            "gas": 20000000,  # 最大 Gas 用量
+                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                        }
+                    )
+                logger.debug(f"transfer transaction: {transaction}")
+
+                # 发送交易
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                if tx_success == False:
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
+                    raise Exception("Failed to send_transaction.")
+                logger.success(f"The transfer transaction was send successfully! - usdc: {sender_balance_usdc}")
+            
+            # SXP账户余额
+            sender_balance_sxp = sxp_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_sxp: {sender_balance_sxp}")
+            time.sleep(1)
+            if 100000000 < sender_balance_sxp: # 大于100开始归集SXP
+                # 获取当前Gas
+                latest_block = web3_obj.eth.get_block('latest')
+                if latest_block is None:
+                    logger.error(f"Ooops! Failed to eth.get_block.")
+                    raise Exception("Failed to eth.get_block.")
+                base_fee_per_gas = latest_block['baseFeePerGas']
+                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
+                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
+
+                # 构建交易 - 转账
+                transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(
+                        {
+                            "chainId": WEB3_CHAINID,
+                            "from": sender_address,
+                            "gas": 20000000,  # 最大 Gas 用量
+                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                        }
+                    )
+                logger.debug(f"transfer transaction: {transaction}")
+
+                # 发送交易
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                if tx_success == False:
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
+                    raise Exception("Failed to send_transaction.")
+                logger.success(f"The transfer transaction was send successfully! - sxp: {sender_balance_sxp}")
+            
+            return 0
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} balanceof_clicker except: {error}")
             return 0
 
     async def ticketbox_list_clicker(self) -> None:
@@ -3626,6 +3748,49 @@ class GaeaDailyTask:
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_emotionclaimed except: {error}")
+            return f"ERROR: {error}"
+
+
+    @helper
+    async def daily_clicker_fundspooling(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            eth_address = clicker_response['eth_address']
+            if eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling_clicker delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
+            # -------------------------------------------------------------------------- generate
+            clicker_response = await self.funds_pooling_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            
+            # delay = random.randint(10, 20)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_fundspooling delay: {delay} seconds")
+            # await asyncio.sleep(delay)
+
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_fundspooling except: {error}")
             return f"ERROR: {error}"
 
     @helper
