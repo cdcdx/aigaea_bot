@@ -35,5 +35,5 @@ if "%1%"=="init" (
     call .venv/Scripts/activate.bat
 
     echo Launch the app ...
-    python main.py %1 %2 %3 %4 %5 %6
+    python main.py %1 %2 %3 %4 %5 %6 %7 %8 %9
 )

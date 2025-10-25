@@ -1,4 +1,5 @@
 import os
+import json
 from dotenv import find_dotenv, load_dotenv, get_key, set_key
 
 load_dotenv(find_dotenv('.env'))
@@ -22,14 +23,34 @@ def set_envsion(key, value, format=True):
 
 # GAEA
 GAEA_API = os.getenv("GAEA_API", default="https://api.aigaea.net")
+# DELAY
+SNAIL_UNIT = int(os.getenv("SNAIL_UNIT", default=1800))  # 延迟单位，秒
 
 # CAPTCHA
-TWO_CAPTCHA_API_URL = os.getenv("TWO_CAPTCHA_API_URL", default="")
+TWO_CAPTCHA_API_URL = os.getenv("TWO_CAPTCHA_API_URL", default="https://api.2captcha.com")
 TWO_CAPTCHA_API_KEY = os.getenv("TWO_CAPTCHA_API_KEY", default="")
+CAPTCHA_KEY = os.getenv("CAPTCHA_KEY", default="")
+
+# ERA3 ONLINE
+ERA3_ONLINE_STAMP=int(os.getenv("ERA3_ONLINE_STAMP", default=1746806400))  # 第3季上线时间  2025-05-10 00:00:00
+
+# REGISTER
+REFERRAL_CODE = get_envsion("REFERRAL_CODE")
+# GODHOODID
+REFERRAL_ADDRESS = get_envsion("REFERRAL_ADDRESS")
+# FUNDS POOLING
+POOLING_ADDRESS = os.getenv("POOLING_ADDRESS", default='{}')
 
 # contract
+WEB3_RPC_FIXED=os.getenv("WEB3_RPC_FIXED", default="")
 WEB3_RPC=os.getenv("WEB3_RPC", default="https://mainnet.base.org")
 WEB3_CHAINID=int(os.getenv("WEB3_CHAINID", default=8453))
 CONTRACT_USDC=os.getenv("CONTRACT_USDC", default="0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
-CONTRACT_EMOTION=os.getenv("CONTRACT_EMOTION", default="0xf6622690902823dc785065cbe5ff30261d28beb7")
+CONTRACT_SXP=os.getenv("CONTRACT_SXP", default="0x31904F19350eE068F186c0d65B25DE9Bf6997c8e")
+CONTRACT_INVITE=os.getenv("CONTRACT_INVITE", default="0xb281bd54ff436b19c285df1b98782c7bec737c72")
+CONTRACT_EMOTION=os.getenv("CONTRACT_EMOTION", default="0x84d2212401eea203bf688c9300c3f691a3ab817e")
 CONTRACT_REWARD=os.getenv("CONTRACT_REWARD", default="0x5cd240574393baeb26870069314308490dddd3c3")
+CONTRACT_SNFTMINT=os.getenv("CONTRACT_SNFTMINT", default="0xdc37b93628719778663d5ac36d2171ce471a9b7e")
+CONTRACT_ANFTMINT=os.getenv("CONTRACT_ANFTMINT", default="0x1ac341d729e01c271Db3B8bCfD2e26172439f614")
+CONTRACT_CHOICE=os.getenv("CONTRACT_CHOICE", default="0x8817ac79bA24E60cf812916A78eF5362389FaA3A")
+CONTRACT_AWARD=os.getenv("CONTRACT_AWARD", default="0x325BD1751eE8E84fE6c77e4543adD95857EAE1b5")
