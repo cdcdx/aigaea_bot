@@ -143,6 +143,12 @@ async def gaea_clicker_fundspooling(runname, id, userid, email, passwd, prikey, 
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_fundspooling()
 
+async def gaea_clicker_milestoneburn(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-milestoneburn")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_milestoneburn()
+
 async def gaea_clicker_milestoneclaim(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-milestoneclaim")

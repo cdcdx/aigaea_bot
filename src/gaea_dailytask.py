@@ -3013,6 +3013,52 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist_clicker except: {error}")
 
+    async def milestoneburn_clicker(self, milestoneid, burn_tickets) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- blindbox_open
+            url = GAEA_API.rstrip('/')+'/api/milestone/burn'
+            json_data = {
+                "burn": burn_tickets
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['msg']}")
+                return response['msg']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker except: {error}")
+
     async def milestoneclaim_clicker(self, milestoneid, taskid) -> None:
         try:
             headers = self.getheaders()
@@ -3862,6 +3908,64 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_emotionclaimed except: {error}")
             return f"ERROR: {error}"
     
+    @helper
+    async def daily_clicker_milestoneburn(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']} ")
+            eth_address = clicker_response['eth_address']
+            if eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
+            # -------------------------------------------------------------------------- milestonelist
+            clicker_response = await self.milestonelist_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} clicker_response: {clicker_response}")
+            
+            ticket_burn=int(os.environ.get('TASK_TICKET', '0'))
+            for milestone in clicker_response:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestone: {milestone}")
+                milestone_id = int(milestone['id'])
+                if milestone['status'] == 2:  # 1 - 未开始 / 2 - 进行中 / 3 - 已结束
+                    burn_user = milestone.get('burn_user', 0)
+                    burn_max = milestone.get('burn_max', 200)
+                    # --------------------------------------------------------------------------
+                    if ticket_burn <= burn_user:
+                        logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Burning is complete. - {burn_user}/{burn_max}")
+                    elif burn_max <= burn_user:
+                        logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Burning is maximum. - {burn_user}/{burn_max}")
+                    else:
+                        burn_real = ticket_burn - burn_user
+                        # -------------------------------------------------------------------------- milestoneburn
+                        clicker_response = await self.milestoneburn_clicker(milestone_id, burn_real)
+                        logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} clicker_response: {clicker_response} - milestone: {milestone_id} burn: {burn_real}")
+            
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Milestone claim completed")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_emotionclaimed except: {error}")
+            return f"ERROR: {error}"
+
     @helper
     async def daily_clicker_milestoneclaim(self):
         try:

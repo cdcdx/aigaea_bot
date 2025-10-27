@@ -9,7 +9,7 @@ import schedule
 import sys
 import time
 from loguru import logger
-from questionary import Choice, select
+from questionary import Choice, select, text
 from termcolor import cprint
 
 from src.functions import (
@@ -23,7 +23,7 @@ from src.functions import (
     gaea_clicker_choicereward, gaea_clicker_choiceclaimed,
     gaea_clicker_snftmint, gaea_clicker_snftinfo, gaea_clicker_snftoblate,
     gaea_clicker_anftmint, gaea_clicker_anftinfo, gaea_clicker_anftoblate,
-    gaea_clicker_milestoneclaim,
+    gaea_clicker_milestoneburn,gaea_clicker_milestoneclaim,
     gaea_clicker_fundspooling,
     gaea_clicker_checkin, gaea_clicker_signin,
     gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, 
@@ -63,6 +63,7 @@ MODULE_MAPPING = {
     'gaea_clicker_anftmint':          gaea_clicker_anftmint,
     'gaea_clicker_anftinfo':          gaea_clicker_anftinfo,
     'gaea_clicker_anftoblate':        gaea_clicker_anftoblate,
+    'gaea_clicker_milestoneburn':     gaea_clicker_milestoneburn,
     'gaea_clicker_milestoneclaim':    gaea_clicker_milestoneclaim,
     'gaea_clicker_fundspooling':      gaea_clicker_fundspooling,
     # 'gaea_clicker_checkin':           gaea_clicker_checkin,
@@ -182,6 +183,9 @@ def run_module(module, runname, runeq, rungt, runlt, runthread):
         if module in [gaea_clicker_alltask]:
             task_choice = choose_task_choice()
             os.environ['TASK_CHOICE'] = task_choice
+    if module in [gaea_clicker_milestoneburn]:
+        task_ticket = input_ticket()
+        os.environ['TASK_TICKET'] = task_ticket
     asyncio.run(gaea_run_modules(module=module, runname=runname, runeq=runeq, rungt=rungt, runlt=runlt, runthread=runthread))
 
 def main(runname, runeq, rungt, runlt, runthread):
@@ -198,24 +202,25 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🔥 Gaea tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="d"),
                     Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="e"),
                     Choice("🐌 Gaea tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="f"),
-                    Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="g"),
+                    # Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="g"),
                     # Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="h"),
                     # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="i"),
-                    Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="h"),
-                    Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="i"),
-                    Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="l"),
-                    Choice("🔥 Gaea tasks - invitereward",                 'gaea_clicker_invitereward',       shortcut_key="m"),
-                    Choice("🐌 Gaea tasks - inviteclaimed",                'gaea_clicker_inviteclaimed',      shortcut_key="n"),
-                    Choice("🔥 Gaea tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="o"),
-                    Choice("🐌 Gaea tasks - emotionclaimed",               'gaea_clicker_emotionclaimed',     shortcut_key="p"),
-                    Choice("🔥 Gaea tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="q"),
-                    Choice("🐌 Gaea tasks - choiceclaimed",                'gaea_clicker_choiceclaimed',      shortcut_key="r"),
-                    Choice("🐌 Gaea tasks - snftmint",                     'gaea_clicker_snftmint',           shortcut_key="s"),
-                    Choice("🔥 Gaea tasks - snftinfo",                     'gaea_clicker_snftinfo',           shortcut_key="t"),
-                    Choice("🐌 Gaea tasks - snftoblate   (🈷️)",            'gaea_clicker_snftoblate',         shortcut_key="u"),
-                    Choice("🐌 Gaea tasks - anftmint",                     'gaea_clicker_anftmint',           shortcut_key="v"),
-                    Choice("🔥 Gaea tasks - anftinfo",                     'gaea_clicker_anftinfo',           shortcut_key="w"),
-                    Choice("🐌 Gaea tasks - anftoblate   (🈷️)",            'gaea_clicker_anftoblate',         shortcut_key="x"),
+                    Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="g"),
+                    Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="h"),
+                    Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="i"),
+                    Choice("🔥 Gaea tasks - invitereward",                 'gaea_clicker_invitereward',       shortcut_key="l"),
+                    Choice("🐌 Gaea tasks - inviteclaimed",                'gaea_clicker_inviteclaimed',      shortcut_key="m"),
+                    Choice("🔥 Gaea tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="n"),
+                    Choice("🐌 Gaea tasks - emotionclaimed",               'gaea_clicker_emotionclaimed',     shortcut_key="o"),
+                    Choice("🔥 Gaea tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="p"),
+                    Choice("🐌 Gaea tasks - choiceclaimed",                'gaea_clicker_choiceclaimed',      shortcut_key="q"),
+                    Choice("🐌 Gaea tasks - snftmint",                     'gaea_clicker_snftmint',           shortcut_key="r"),
+                    Choice("🔥 Gaea tasks - snftinfo",                     'gaea_clicker_snftinfo',           shortcut_key="s"),
+                    Choice("🐌 Gaea tasks - snftoblate   (🈷️)",            'gaea_clicker_snftoblate',         shortcut_key="t"),
+                    Choice("🐌 Gaea tasks - anftmint",                     'gaea_clicker_anftmint',           shortcut_key="u"),
+                    Choice("🔥 Gaea tasks - anftinfo",                     'gaea_clicker_anftinfo',           shortcut_key="v"),
+                    Choice("🐌 Gaea tasks - anftoblate   (🈷️)",            'gaea_clicker_anftoblate',         shortcut_key="w"),
+                    Choice("🔥 Gaea tasks - milestoneburn",                'gaea_clicker_milestoneburn',      shortcut_key="x"),
                     Choice("🐌 Gaea tasks - milestoneclaim",               'gaea_clicker_milestoneclaim',     shortcut_key="y"),
                     Choice("🐌 Fund tasks - fundspooling",                 'gaea_clicker_fundspooling',       shortcut_key="z"),
                     # Choice("🔥 Gaea daily tasks - checkin        (☀️)",    'gaea_clicker_checkin',            shortcut_key="1"),
@@ -299,6 +304,16 @@ def choose_task_choice():
         use_arrow_keys=True,
     ).ask()
     return task_choice
+
+def input_ticket():
+    task_ticket = text(
+        'Input ticket (0-No Choice, 1~200):'
+    ).ask()
+    
+    if task_ticket is None:  # 用户按了 Ctrl+C
+        return '0'
+    
+    return task_ticket.strip()
 
 # ----------------------------------------------------------------------------------------------------------
 
