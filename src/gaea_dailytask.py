@@ -3943,6 +3943,8 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} clicker_response: {clicker_response}")
             
             ticket_burn=int(os.environ.get('TASK_TICKET', '0'))
+            ticket_burn_random=int(os.environ.get('TASK_TICKET_RANDOM', '0'))
+            ticket_burn = ticket_burn + random.randint(0, ticket_burn_random)
             for milestone in clicker_response:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestone: {milestone}")
                 milestone_id = int(milestone['id'])

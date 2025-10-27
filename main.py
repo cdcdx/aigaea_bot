@@ -186,6 +186,9 @@ def run_module(module, runname, runeq, rungt, runlt, runthread):
     if module in [gaea_clicker_milestoneburn]:
         task_ticket = input_ticket()
         os.environ['TASK_TICKET'] = task_ticket
+        task_ticket_random = random_ticket()
+        os.environ['TASK_TICKET_RANDOM'] = task_ticket_random
+        
     asyncio.run(gaea_run_modules(module=module, runname=runname, runeq=runeq, rungt=rungt, runlt=runlt, runthread=runthread))
 
 def main(runname, runeq, rungt, runlt, runthread):
@@ -307,13 +310,23 @@ def choose_task_choice():
 
 def input_ticket():
     task_ticket = text(
-        'Input ticket (0-No Choice, 1~200):'
+        'burn ticket (0-No Ticket, 1~200):'
     ).ask()
     
     if task_ticket is None:  # 用户按了 Ctrl+C
         return '0'
     
     return task_ticket.strip()
+
+def random_ticket():
+    task_random = text(
+        'random ticket (0-No random, 1~200):'
+    ).ask()
+    
+    if task_random is None:  # 用户按了 Ctrl+C
+        return '0'
+    
+    return task_random.strip()
 
 # ----------------------------------------------------------------------------------------------------------
 
