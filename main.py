@@ -15,7 +15,9 @@ from termcolor import cprint
 from src.functions import (
     gaea_clicker_register, gaea_clicker_login, 
     gaea_clicker_session, gaea_clicker_bindaddress, 
-    gaea_clicker_godhoodinfo, gaea_clicker_godhoodid, gaea_clicker_godhoodgrowthinfo, gaea_clicker_godhoodemotion, 
+    gaea_clicker_godhoodinfo, gaea_clicker_godhoodid, gaea_clicker_godhoodgrowthinfo, 
+    gaea_clicker_godhoodemotion, 
+    gaea_clicker_godhoodtransfer,
     gaea_clicker_era3info, gaea_clicker_earninfo, 
     gaea_clicker_referralreword, gaea_clicker_openblindbox, 
     gaea_clicker_invitereward, gaea_clicker_inviteclaimed,
@@ -44,9 +46,10 @@ MODULE_MAPPING = {
     'gaea_clicker_session':           gaea_clicker_session,
     'gaea_clicker_bindaddress':       gaea_clicker_bindaddress,
     'gaea_clicker_godhoodinfo':       gaea_clicker_godhoodinfo,
-    'gaea_clicker_godhoodid':         gaea_clicker_godhoodid,
-    'gaea_clicker_godhoodgrowthinfo': gaea_clicker_godhoodgrowthinfo,
+    # 'gaea_clicker_godhoodid':         gaea_clicker_godhoodid,
+    # 'gaea_clicker_godhoodgrowthinfo': gaea_clicker_godhoodgrowthinfo,
     # 'gaea_clicker_godhoodemotion':    gaea_clicker_godhoodemotion,
+    'gaea_clicker_godhoodtransfer':   gaea_clicker_godhoodtransfer,
     # 'gaea_clicker_era3info':          gaea_clicker_era3info,
     'gaea_clicker_earninfo':          gaea_clicker_earninfo,
     'gaea_clicker_referralreword':    gaea_clicker_referralreword,
@@ -204,10 +207,11 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🚀 Gaea tasks - session",                      'gaea_clicker_session',            shortcut_key="c"),
                     Choice("🔥 Gaea tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="d"),
                     Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="e"),
-                    Choice("🐌 Gaea tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="f"),
-                    # Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="g"),
-                    # Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="h"),
-                    # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="i"),
+                    # Choice("🐌 Gaea tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="f"), # 购买神格卡 - inviter
+                    # Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="g"), # ID卡等级信息 - exp
+                    # Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="h"), # 上传神格情绪
+                    Choice("🔥 Gaea tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="f"), # 划转
+                    # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="i"), # 第三纪信息
                     Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="g"),
                     Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="h"),
                     Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="i"),
