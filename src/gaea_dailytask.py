@@ -2376,7 +2376,7 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(invite_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            if reward_usdc == 0: # 
+            if reward_usdc < 10.0: # 
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} reward_usdc: {reward_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address} reward_usdc: {reward_usdc}")
