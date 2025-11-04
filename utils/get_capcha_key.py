@@ -67,15 +67,15 @@ class TwoCaptcha:
             url=url, 
             json=payload
         )
-        logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} createTask response: {response}")
         if str(response).find("ERROR") > -1:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {response}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} createTask response: {response}")
             return response
+        logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} createTask response: {response}")
 
-        logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Create taskId: {response['taskId']}")
+        logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} createTask taskId: {response['taskId']}")
 
         if response.get('errorId', None):
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Bad request to 2Captcha(Create Task)")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Bad request to 2Captcha(Create Task)")
             return 'ERROR:Bad request to 2Captcha(Create Task)'
             raise Exception('Bad request to 2Captcha(Create Task)')
         return response.get('taskId', None)
@@ -117,6 +117,6 @@ class TwoCaptcha:
             await asyncio.sleep(5)
 
             if total_time > timeout:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Can`t get captcha solve in 360 second")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Can`t get captcha solve in 360 second")
                 return "ERROR: Can`t get captcha solve in 360 second"
                 raise Exception('Can`t get captcha solve in 360 second')
