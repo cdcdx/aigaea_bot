@@ -6,7 +6,7 @@ from loguru import logger
 from src.gaea_client import GaeaClient, getheaders, make_request
 from utils.get_capcha_key import TwoCaptcha
 from config import set_envsion, GAEA_API, ERA3_ONLINE_STAMP
-from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_EMOTION, CONTRACT_REWARD
+from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_TICKET, CONTRACT_EMOTION, CONTRACT_REWARD
 
 async def get_captcha_key(client: GaeaClient):
     two_captcha = TwoCaptcha(client)
@@ -21,6 +21,7 @@ def update_web3_config(config):
     set_envsion("WEB3_CHAINID", str(config.get("chain_id")), format=False)
     set_envsion("CONTRACT_USDC", config.get("usd"), format=False)
     set_envsion("CONTRACT_SXP", config.get("sxp"), format=False)
+    set_envsion("CONTRACT_TICKET", config.get("ticket"), format=False)
     set_envsion("CONTRACT_INVITE", config.get("invite"), format=False)
     set_envsion("CONTRACT_SNFTMINT", config.get("snftmint"), format=False)
     set_envsion("CONTRACT_ANFTMINT", config.get("anftmint"), format=False)
@@ -39,6 +40,7 @@ def update_web3_config(config):
     WEB3_CHAINID = config["chain_id"]
     CONTRACT_USDC = config["usd"]
     CONTRACT_SXP = config["sxp"]
+    CONTRACT_TICKET = config["ticket"]
     CONTRACT_INVITE = config["invite"]
     CONTRACT_SNFTMINT = config["snftmint"]
     CONTRACT_ANFTMINT = config["anftmint"]

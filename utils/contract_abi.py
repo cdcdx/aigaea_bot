@@ -397,3 +397,84 @@ contract_abi_award = [
     },
 ]
 
+contract_abi_ticket = [
+    {
+        "inputs": [
+            { "internalType": "uint8", "name": "level", "type": "uint8" },
+            { "internalType": "uint8", "name": "rebate", "type": "uint8" },
+            { "internalType": "bytes", "name": "_finalhash", "type": "bytes" }
+        ],
+        "name": "buyTickets",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            { "internalType": "uint8", "name": "level", "type": "uint8" },
+            { "internalType": "uint256", "name": "quantity", "type": "uint256" },
+            { "internalType": "uint8", "name": "rebate", "type": "uint8" },
+            { "internalType": "bytes", "name": "_finalhash", "type": "bytes" }
+        ],
+        "name": "buyTicketsBatch",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            { "internalType": "address", "name": "user", "type": "address" }
+        ],
+        "name": "canPurchaseLevel1",
+        "outputs": [
+            { "internalType": "bool", "name": "", "type": "bool" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            { "internalType": "address", "name": "", "type": "address" }
+        ],
+        "name": "hasPurchasedLevel1",
+        "outputs": [
+            { "internalType": "bool", "name": "", "type": "bool" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            { "internalType": "uint8", "name": "level", "type": "uint8" }
+        ],
+        "name": "getTicketLevel",
+        "outputs": [
+            { 
+                "components": [
+                    { "internalType": "uint256", "name": "price", "type": "uint256" },
+                    { "internalType": "uint256", "name": "baseTickets", "type": "uint256" },
+                    { "internalType": "uint256", "name": "bonusTickets", "type": "uint256" },
+                    { "internalType": "uint256", "name": "totalTickets", "type": "uint256" }
+                ], 
+                "internalType": "struct TicketSale.TicketLevel", 
+                "name": "", 
+                "type": "tuple" 
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            { "internalType": "address", "name": "", "type": "address" },
+            { "internalType": "uint8", "name": "", "type": "uint8" }
+        ],
+        "name": "userPurchases",
+        "outputs": [
+            { "internalType": "uint256", "name": "", "type": "uint256" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]
+

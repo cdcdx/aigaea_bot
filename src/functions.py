@@ -67,11 +67,11 @@ async def gaea_clicker_openblindbox(runname, id, userid, email, passwd, prikey, 
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_openblindbox()
 
-async def gaea_clicker_godhoodinfo(runname, id, userid, email, passwd, prikey, token, proxy):
+async def gaea_clicker_buytickets(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
-        os.system("title gaea-godhoodinfo")
+        os.system("title gaea-buytickets")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_godhoodinfo()
+    return await daily_task.daily_clicker_buytickets()
 
 async def gaea_clicker_godhoodid(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
@@ -84,6 +84,12 @@ async def gaea_clicker_godhoodemotion(runname, id, userid, email, passwd, prikey
         os.system("title gaea-godhoodemotion")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_godhoodemotion()
+
+async def gaea_clicker_godhoodinfo(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-godhoodinfo")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_godhoodinfo()
 
 async def gaea_clicker_godhoodgrowthinfo(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':

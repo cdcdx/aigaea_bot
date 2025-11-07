@@ -15,11 +15,11 @@ from termcolor import cprint
 from src.functions import (
     gaea_clicker_register, gaea_clicker_login, 
     gaea_clicker_session, gaea_clicker_bindaddress, 
+    gaea_clicker_openblindbox, gaea_clicker_buytickets,
     gaea_clicker_era3info, 
     gaea_clicker_earninfo, 
-    gaea_clicker_openblindbox, 
-    gaea_clicker_godhoodinfo, gaea_clicker_godhoodgrowthinfo, 
     gaea_clicker_godhoodid, gaea_clicker_godhoodemotion, 
+    gaea_clicker_godhoodinfo, gaea_clicker_godhoodgrowthinfo, 
     gaea_clicker_godhoodtransfer,
     gaea_clicker_godhoodreward, gaea_clicker_godhoodclaimed,
     gaea_clicker_emotionreward, gaea_clicker_emotionclaimed,
@@ -46,12 +46,13 @@ MODULE_MAPPING = {
     'gaea_clicker_login':             gaea_clicker_login,
     'gaea_clicker_session':           gaea_clicker_session,
     'gaea_clicker_bindaddress':       gaea_clicker_bindaddress,
+    'gaea_clicker_openblindbox':      gaea_clicker_openblindbox,
+    'gaea_clicker_buytickets':        gaea_clicker_buytickets,
     'gaea_clicker_earninfo':          gaea_clicker_earninfo,
     # 'gaea_clicker_era3info':          gaea_clicker_era3info,
-    'gaea_clicker_openblindbox':      gaea_clicker_openblindbox,
-    'gaea_clicker_godhoodinfo':       gaea_clicker_godhoodinfo,
     # 'gaea_clicker_godhoodid':         gaea_clicker_godhoodid,
     # 'gaea_clicker_godhoodemotion':    gaea_clicker_godhoodemotion,
+    'gaea_clicker_godhoodinfo':       gaea_clicker_godhoodinfo,
     # 'gaea_clicker_godhoodgrowthinfo': gaea_clicker_godhoodgrowthinfo,
     'gaea_clicker_godhoodtransfer':   gaea_clicker_godhoodtransfer,
     'gaea_clicker_godhoodreward':     gaea_clicker_godhoodreward,
@@ -187,12 +188,17 @@ def run_module(module, runname, runeq, rungt, runlt, runthread):
         if module in [gaea_clicker_alltask]:
             task_choice = choose_task_choice()
             os.environ['TASK_CHOICE'] = task_choice
+    
     if module in [gaea_clicker_milestoneburn]:
         task_ticket = input_ticket()
         os.environ['TASK_TICKET'] = task_ticket
         task_ticket_random = random_ticket()
         os.environ['TASK_TICKET_RANDOM'] = task_ticket_random
-        
+    
+    if module in [gaea_clicker_buytickets]:
+        ticket_level = choose_ticket_level()
+        os.environ['TICKET_LEVEL'] = ticket_level
+    
     asyncio.run(gaea_run_modules(module=module, runname=runname, runeq=runeq, rungt=rungt, runlt=runlt, runthread=runthread))
 
 def main(runname, runeq, rungt, runlt, runthread):
@@ -207,12 +213,13 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🚀 Gaea tasks - login",                        'gaea_clicker_login',              shortcut_key="b"),
                     Choice("🚀 Gaea tasks - session",                      'gaea_clicker_session',            shortcut_key="c"),
                     Choice("🔥 Gaea tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="d"),
-                    Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="e"),
-                    # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="f"), # 第三纪信息 - era3
-                    Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="f"),
-                    Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="g"),
+                    Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="e"),
+                    Choice("🔥 Gaea tasks - buytickets",                   'gaea_clicker_buytickets',         shortcut_key="f"),
+                    Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="g"),
+                    # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="g"), # 第三纪信息 - era3
                     # Choice("🐌 Gaea tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="g"), # 购买神格卡 - inviter
                     # Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="g"), # 上传神格情绪
+                    # Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="g"), # 神格卡信息
                     # Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="g"), # ID卡等级信息 - exp
                     Choice("🔥 Gaea tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="h"), # USD划转
                     Choice("🔥 Gaea tasks - godhoodreward",                'gaea_clicker_godhoodreward',      shortcut_key="i"),
@@ -312,6 +319,21 @@ def choose_task_choice():
         use_arrow_keys=True,
     ).ask()
     return task_choice
+
+def choose_ticket_level():
+    task_ticket_level = select(
+        'Choose Ticket',
+        choices=[
+            Choice("No ticket", '0', shortcut_key="0"),
+            Choice("Level 1",   '1', shortcut_key="1"),
+            Choice("Level 2",   '2', shortcut_key="2"),
+            Choice("Level 3",   '3', shortcut_key="3"),
+            Choice("Level 4",   '4', shortcut_key="4"),
+        ],
+        use_shortcuts=True,
+        use_arrow_keys=True,
+    ).ask()
+    return task_ticket_level
 
 def input_ticket():
     task_ticket = text(

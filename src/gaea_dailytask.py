@@ -15,12 +15,12 @@ from web3 import Web3
 from eth_account.messages import encode_defunct
 
 from src.gaea_client import GaeaClient
-from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_reward, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award
+from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_reward, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award, contract_abi_ticket
 from utils.decorators import helper
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
 from utils.services import get_captcha_key
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, SNAIL_UNIT
-from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS, POOLING_ADDRESS
+from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_TICKET, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS, POOLING_ADDRESS
 
 def connect_web3_rpc():
     """
@@ -709,6 +709,50 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker except: {error}")
 
+    # -------------------------------------------------------------------------- 日常任务
+
+    ## 购票任务
+    async def ticket_levels_list_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- ticket_levels
+            url = GAEA_API.rstrip('/')+'/api/ticket/levels'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker except: {error}")
+
     async def ticket_generate_clicker(self, level: int| None = 1) -> None:
         try:
             headers = self.getheaders()
@@ -750,182 +794,140 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker except: {error}")
 
-    # -------------------------------------------------------------------------- 日常任务
-
-    ## 过期任务
-    async def checkin_clicker(self) -> None:
+    async def ticket_buy_clicker(self, tick_level, tick_rebate, final_hash) -> None:
         try:
-            headers = self.getheaders()
-            if len(headers.get('Authorization', None)) < 50:
-                # -------------------------------------------------------------------------- login
-                login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
-            # -------------------------------------------------------------------------- checkin
-            url = GAEA_API.rstrip('/')+'/api/mission/complete-mission'
-            json_data = {
-                "mission_id": "1"
-            }
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker tick_level: {tick_level}")
+            # -------------------------------------------------------------------------- ticket_buy
+            web3_obj = connect_web3_rpc()
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker url: {url}")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker json_data: {json_data}")
-            response = await self.client.make_request(
-                method='POST', 
-                url=url, 
-                headers=headers,
-                json=json_data
-            )
-            if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
-                raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            if sender_balance_eth == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
+                return "ERRRO"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
 
-            code = response.get('code', None)
-            if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker => {response['data']}")
-                return response['data']
-            else:
-                message = response.get('msg', None)
-                if message is None:
-                    message = f"{response.get('detail', None)}" 
-                if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker => {message}")
-                    return message
-                else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker ERROR: {message}")
-                    raise Exception(message)
+            # 购票合约地址
+            ticket_address = Web3.to_checksum_address(CONTRACT_TICKET)
+            ticket_contract = web3_obj.eth.contract(address=ticket_address, abi=contract_abi_ticket)
+
+            if tick_level==1:
+                # 是否购买过超级折扣
+                ticket_level_one = ticket_contract.functions.hasPurchasedLevel1( sender_address ).call()
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} | ticket_level_one: {ticket_level_one}")
+                if ticket_level_one:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} | Already purchased level1")
+                    raise Exception("Already purchased level1")
+
+            # 查询票价
+            ticket_info = ticket_contract.functions.getTicketLevel( tick_level ).call()
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} | ticket_info: {ticket_info}")
+            ticket_price = ticket_info[0]
+            if ticket_price == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_price: {ticket_price}")
+                raise Exception("ticket_price: 0")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_price: {ticket_price}")
+            # --------------------------------------------------------------------------
+
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            # 账户余额
+            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
+            # 购卡合约授权金额
+            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, ticket_address).call()
+            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
+
+            # USDC余额不足
+            if ticket_price > sender_balance_usdc:
+                # logger.error(f"Ooops! Insufficient USDC balance.")
+                raise Exception("Insufficient USDC balance.")
+                return "Insufficient USDC balance."
+
+            # 购票合约USDC授权额度不足
+            if ticket_price > sender_allowance_usdc:
+                logger.error(f"Ooops! Insufficient USDC authorization amount for ticket_contract.")
+                # raise Exception("Insufficient USDC authorization amount for ticket_contract.")
+
+                # 获取当前Gas
+                latest_block = web3_obj.eth.get_block('latest')
+                if latest_block is None:
+                    logger.error(f"Ooops! Failed to eth.get_block.")
+                    raise Exception("Failed to eth.get_block.")
+                base_fee_per_gas = latest_block['baseFeePerGas']
+                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
+                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
+
+                # 构建交易 - 购卡合约金额授权
+                transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(
+                    {
+                        "chainId": WEB3_CHAINID,
+                        "from": sender_address,
+                        "gas": 20000000,  # 最大 Gas 用量
+                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                    }
+                )
+                logger.debug(f"approve transaction: {transaction}")
+
+                # 发送交易
+                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                if tx_success == False:
+                    logger.error(f"Ooops! Failed to send_transaction.")
+                    raise Exception("Failed to send_transaction.")
+                
+                logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
+
+            # --------------------------------------------------------------------------
+
+            # 获取当前Gas
+            latest_block = web3_obj.eth.get_block('latest')
+            if latest_block is None:
+                logger.error(f"Ooops! Failed to eth.get_block.")
+                raise Exception("Failed to eth.get_block.")
+            base_fee_per_gas = latest_block['baseFeePerGas']
+            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
+            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
+
+            # 构建交易 - 购买
+            transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(
+                    {
+                        "chainId": WEB3_CHAINID,
+                        "from": sender_address,
+                        "gas": 20000000,  # 最大 Gas 用量
+                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                    }
+                )
+            logger.debug(f"buyTickets transaction: {transaction}")
+
+            # 发送交易
+            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            if tx_success == False:
+                logger.error(f"Ooops! Failed to send_transaction.")
+                raise Exception("Failed to send_transaction.")
+            
+            logger.success(f"The buyTickets transaction was send successfully! - tick_level: {tick_level} tick_rebate: {tick_rebate}")
+            return "SUCCESS"
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker except: {error}")
-
-    async def signin_clicker(self) -> None:
-        try:
-            headers = self.getheaders()
-            if len(headers.get('Authorization', None)) < 50:
-                # -------------------------------------------------------------------------- login
-                login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
-            # -------------------------------------------------------------------------- signin
-            url = GAEA_API.rstrip('/')+'/api/signin/complete'
-            json_data = {
-                "detail": "Positive_Love"
-            }
-
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker url: {url}")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker json_data: {json_data}")
-            response = await self.client.make_request(
-                method='POST', 
-                url=url, 
-                headers=headers,
-                json=json_data
-            )
-            if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
-                raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
-
-            code = response.get('code', None)
-            if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker => {response['data']}")
-                return response['data']
-            else:
-                message = response.get('msg', None)
-                if message is None:
-                    message = f"{response.get('detail', None)}" 
-                if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker => {message}")
-                    return message
-                else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker ERROR: {message}")
-                    raise Exception(message)
-        except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker except: {error}")
-
-    async def referral_list_clicker(self) -> None:
-        try:
-            headers = self.getheaders()
-            if len(headers.get('Authorization', None)) < 50:
-                # -------------------------------------------------------------------------- login
-                login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
-            # -------------------------------------------------------------------------- referral_list
-            url = GAEA_API.rstrip('/')+'/api/reward/referral-list'
-
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker url: {url}")
-            response = await self.client.make_request(
-                method='GET', 
-                url=url, 
-                headers=headers
-            )
-            if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker {response}")
-                raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker {response}")
-
-            code = response.get('code', None)
-            if code in [200, 201]:
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
-                return response['data']
-            else:
-                message = response.get('msg', None)
-                if message is None:
-                    message = f"{response.get('detail', None)}" 
-                if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker => {message}")
-                    return message
-                else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker ERROR: {message}")
-                    raise Exception(message)
-        except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker except: {error}")
-
-    async def referral_complete_clicker(self) -> None:
-        try:
-            headers = self.getheaders()
-            if len(headers.get('Authorization', None)) < 50:
-                # -------------------------------------------------------------------------- login
-                login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
-            # -------------------------------------------------------------------------- referral_complete
-            url = GAEA_API.rstrip('/')+'/api/reward/referral-complete'
-
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker url: {url}")
-            response = await self.client.make_request(
-                method='POST', 
-                url=url, 
-                headers=headers,
-            )
-            if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker {response}")
-                raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker {response}")
-
-            code = response.get('code', None)
-            if code in [200, 201]:
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
-                return response['data']
-            else:
-                message = response.get('msg', None)
-                if message is None:
-                    message = f"{response.get('detail', None)}" 
-                if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker => {message}")
-                    return message
-                else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker ERROR: {message}")
-                    raise Exception(message)
-        except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker except: {error}")
 
     ## 日常签到
     async def dailylist_clicker(self) -> None:
@@ -1345,14 +1347,15 @@ class GaeaDailyTask:
             # 钱包地址
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            if sender_balance_eth == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
+                return "ERRRO"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            # USDC合约地址
-            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
-            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            
             # 购卡合约地址
             invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
             invite_contract = web3_obj.eth.contract(address=invite_address, abi=contract_abi_invite)
-        
+
             # 当前是否购卡
             is_godhoodid = invite_contract.functions.isgodhoodID( sender_address ).call()
             logger.debug(f"is_godhoodid: {is_godhoodid}")
@@ -1361,6 +1364,11 @@ class GaeaDailyTask:
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid already completed | godhoodid: {is_godhoodid}")
                 return 'godhoodid already completed'
 
+            # --------------------------------------------------------------------------
+
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
             # 账户余额
             sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
             logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
@@ -1374,7 +1382,7 @@ class GaeaDailyTask:
                 # logger.error(f"Ooops! Insufficient USDC balance.")
                 raise Exception("Insufficient USDC balance.")
                 return "Insufficient USDC balance."
-            
+
             # 购卡合约USDC授权额度不足
             if inviter_price > sender_allowance_usdc:
                 logger.error(f"Ooops! Insufficient USDC authorization amount for invite_contract.")
@@ -1412,6 +1420,8 @@ class GaeaDailyTask:
                     raise Exception("Failed to send_transaction.")
                 
                 logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
+
+            # --------------------------------------------------------------------------
 
             # 获取当前Gas
             latest_block = web3_obj.eth.get_block('latest')
@@ -1756,9 +1766,6 @@ class GaeaDailyTask:
             if eth_address.lower() != sender_address.lower():
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
                 raise Exception("Does not match the binding address.")
-            # USDC合约地址
-            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
-            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
             # 情绪合约地址
             emotion_address = Web3.to_checksum_address(CONTRACT_EMOTION)
             if ERA3_ONLINE_STAMP > current_timestamp:
@@ -1766,13 +1773,6 @@ class GaeaDailyTask:
             else:
                 emotion_contract = web3_obj.eth.contract(address=emotion_address, abi=contract_abi_emotion2)
         
-            # 账户余额
-            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
-            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
-            # 情绪合约授权金额
-            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, emotion_address).call()
-            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
-
             # 当期ID
             current_period_id = emotion_contract.functions.Issue().call()
             logger.debug(f"current_period_id: {current_period_id}")
@@ -1799,6 +1799,18 @@ class GaeaDailyTask:
             if end_timestamp < current_timestamp:
                 logger.info(f"The {current_period_id} period is over.")
                 return f"The {current_period_id} period is over."
+
+            # --------------------------------------------------------------------------
+
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            # 账户余额
+            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
+            # 情绪合约授权金额
+            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, emotion_address).call()
+            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
 
             # USDC余额不足
             if current_period_price > sender_balance_usdc:
@@ -1844,6 +1856,8 @@ class GaeaDailyTask:
                     raise Exception("Failed to send_transaction.")
                 
                 logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
+
+            # --------------------------------------------------------------------------
 
             # 获取当前Gas
             latest_block = web3_obj.eth.get_block('latest')
@@ -2156,19 +2170,9 @@ class GaeaDailyTask:
             if eth_address.lower() != sender_address.lower():
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
                 raise Exception("Does not match the binding address.")
-            # USDC合约地址
-            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
-            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
             # 抉择合约地址
             choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
             choice_contract = web3_obj.eth.contract(address=choice_address, abi=contract_abi_choice)
-        
-            # 账户余额
-            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
-            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
-            # 情绪合约授权金额
-            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, choice_address).call()
-            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
 
             # 当前是否打卡
             current_choice = choice_contract.functions.isBet(sender_address).call()
@@ -2195,6 +2199,18 @@ class GaeaDailyTask:
             if end_timestamp < current_timestamp:
                 logger.info(f"The {current_period_id} period is over.")
                 return f"The {current_period_id} period is over."
+
+            # --------------------------------------------------------------------------
+
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            # 账户余额
+            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
+            # 情绪合约授权金额
+            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, choice_address).call()
+            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
 
             # USDC余额不足
             if current_period_price > sender_balance_usdc:
@@ -2240,6 +2256,8 @@ class GaeaDailyTask:
                     raise Exception("Failed to send_transaction.")
                 
                 logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
+
+            # --------------------------------------------------------------------------
 
             # 获取当前Gas
             latest_block = web3_obj.eth.get_block('latest')
@@ -3053,9 +3071,182 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling_clicker except: {error}")
             return 0
 
-    # --------------------------------------------------------------------------
+    # -------------------------------------------------------------------------- 过期任务
 
-    ## 过期任务
+    async def checkin_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- checkin
+            url = GAEA_API.rstrip('/')+'/api/mission/complete-mission'
+            json_data = {
+                "mission_id": "1"
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker except: {error}")
+
+    async def signin_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- signin
+            url = GAEA_API.rstrip('/')+'/api/signin/complete'
+            json_data = {
+                "detail": "Positive_Love"
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker except: {error}")
+
+    async def referral_list_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- referral_list
+            url = GAEA_API.rstrip('/')+'/api/reward/referral-list'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker except: {error}")
+
+    async def referral_complete_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- referral_complete
+            url = GAEA_API.rstrip('/')+'/api/reward/referral-complete'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker url: {url}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker except: {error}")
+
     @helper
     async def daily_clicker_checkin(self):
         try:
@@ -3129,6 +3320,8 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_referralreword except: {error}")
             return f"ERROR: {error}"
+
+    # --------------------------------------------------------------------------
 
     ## 基础任务
     @helper
@@ -3341,27 +3534,45 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_openblindbox except: {error}")
             return f"ERROR: {error}"
-    
+
     @helper
-    async def daily_clicker_godhoodinfo(self):
+    async def daily_clicker_buytickets(self):
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
+    
+            # # -------------------------------------------------------------------------- ticket_level
+            tick_level=os.environ.get('TICKET_LEVEL', '0')
+            if tick_level == '0':
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Please set TICKET_LEVEL")
+                return "ERROR"
+            tick_level=int(tick_level)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tick_level: {tick_level}")
             
-            # -------------------------------------------------------------------------- godhoodinfo
-            clicker_response = await self.godhoodinfo_clicker()
+            # -------------------------------------------------------------------------- generate
+            clicker_response = await self.ticket_generate_clicker(tick_level)
             if clicker_response is None:
                 return "ERROR"
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} generate response: {clicker_response}")  # {'level': 1, 'percentage': 90, 'final_hash': 'xxxxxxx'}
             
-            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response['mood']}")
-            if clicker_response['mood'] is None:
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotion_code: None")
-            else:
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotion_code: {clicker_response['mood']['emotion_code']}")
+            tick_rebate = clicker_response['percentage']
+            final_hash = clicker_response['final_hash']
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tick_level: {tick_level} tick_rebate: {tick_rebate} final_hash: {final_hash}")
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_generate delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
+            # -------------------------------------------------------------------------- ticket_buy
+            blindboxes = await self.ticket_buy_clicker(tick_level,tick_rebate,final_hash)
+            if blindboxes is None:
+                return "ERROR"
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} buy response: {blindboxes}")
+            
             return "SUCCESS"
         except Exception as error:
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodinfo except: {error}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_buytickets except: {error}")
             return f"ERROR: {error}"
 
     @helper
@@ -3431,6 +3642,28 @@ class GaeaDailyTask:
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodemotion except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_godhoodinfo(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- godhoodinfo
+            clicker_response = await self.godhoodinfo_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response['mood']}")
+            if clicker_response['mood'] is None:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotion_code: None")
+            else:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotion_code: {clicker_response['mood']['emotion_code']}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodinfo except: {error}")
             return f"ERROR: {error}"
 
     @helper
@@ -4031,7 +4264,7 @@ class GaeaDailyTask:
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_anftoblate except: {error}")
             return f"ERROR: {error}"
-    
+
     @helper
     async def daily_clicker_milestoneburn(self):
         try:
