@@ -83,7 +83,7 @@ class GaeaClient:
                         return data
                     raise Exception(f"Bad request to {self.__class__.__name__}({method}) status: {response.status} API: {str(await response.text()).splitlines()[0]}")
             except (socket.gaierror, asyncio.TimeoutError) as error:  # 增加对DNS解析失败和超时的处理
-                if int(total_time/30) == 0:
+                if int(total_time/30) < 2:
                     logger.debug(f"id: {self.id} make_request retry: {int(total_time/30)} DNS or Timeout ERROR: {str(error).splitlines()[0]} json: {json}")
                 else:
                     logger.error(f"id: {self.id} make_request retry: {int(total_time/30)} DNS or Timeout ERROR: {str(error).splitlines()[0]} json: {json}")
@@ -94,7 +94,7 @@ class GaeaClient:
                 await asyncio.sleep(30)
                 continue
             except Exception as error:
-                if int(total_time/30) == 0:
+                if int(total_time/30) < 2:
                     logger.debug(f"id: {self.id} make_request retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} json: {json}")
                 else:
                     logger.error(f"id: {self.id} make_request retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} json: {json}")
@@ -179,7 +179,7 @@ async def make_request(method:str = 'GET', url:str = None, headers:dict = None, 
                         return data
                     raise Exception(f"Bad request to ({method}) status: {response.status} API: {str(await response.text()).splitlines()[0]}")
         except (socket.gaierror, asyncio.TimeoutError) as error:  # 增加对DNS解析失败和超时的处理
-            if int(total_time/30) == 0:
+            if int(total_time/30) < 2:
                 logger.debug(f"make_request retry: {int(total_time/30)} DNS or Timeout ERROR: {str(error).splitlines()[0]} json: {json}")
             else:
                 logger.error(f"make_request retry: {int(total_time/30)} DNS or Timeout ERROR: {str(error).splitlines()[0]} json: {json}")
@@ -190,7 +190,7 @@ async def make_request(method:str = 'GET', url:str = None, headers:dict = None, 
             await asyncio.sleep(30)
             continue
         except Exception as error:
-            if int(total_time/30) == 0:
+            if int(total_time/30) < 2:
                 logger.debug(f"make_request retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} json: {json}")
             else:
                 logger.error(f"make_request retry: {int(total_time/30)} except ERROR: {str(error).splitlines()[0]} json: {json}")

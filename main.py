@@ -15,19 +15,20 @@ from termcolor import cprint
 from src.functions import (
     gaea_clicker_register, gaea_clicker_login, 
     gaea_clicker_session, gaea_clicker_bindaddress, 
-    gaea_clicker_godhoodinfo, gaea_clicker_godhoodid, gaea_clicker_godhoodgrowthinfo, 
-    gaea_clicker_godhoodemotion, 
+    gaea_clicker_era3info, 
+    gaea_clicker_earninfo, 
+    gaea_clicker_openblindbox, 
+    gaea_clicker_godhoodinfo, gaea_clicker_godhoodgrowthinfo, 
+    gaea_clicker_godhoodid, gaea_clicker_godhoodemotion, 
     gaea_clicker_godhoodtransfer,
-    gaea_clicker_era3info, gaea_clicker_earninfo, 
-    gaea_clicker_referralreword, gaea_clicker_openblindbox, 
-    gaea_clicker_invitereward, gaea_clicker_inviteclaimed,
+    gaea_clicker_godhoodreward, gaea_clicker_godhoodclaimed,
     gaea_clicker_emotionreward, gaea_clicker_emotionclaimed,
     gaea_clicker_choicereward, gaea_clicker_choiceclaimed,
     gaea_clicker_snftmint, gaea_clicker_snftinfo, gaea_clicker_snftoblate,
     gaea_clicker_anftmint, gaea_clicker_anftinfo, gaea_clicker_anftoblate,
     gaea_clicker_milestoneburn,gaea_clicker_milestoneclaim,
     gaea_clicker_fundspooling,
-    gaea_clicker_checkin, gaea_clicker_signin,
+    gaea_clicker_checkin, gaea_clicker_signin, gaea_clicker_referralreword,
     gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, 
     gaea_clicker_aitrain, gaea_clicker_traincheckin,
     gaea_clicker_deeptrain, gaea_clicker_tickettrain, 
@@ -45,17 +46,17 @@ MODULE_MAPPING = {
     'gaea_clicker_login':             gaea_clicker_login,
     'gaea_clicker_session':           gaea_clicker_session,
     'gaea_clicker_bindaddress':       gaea_clicker_bindaddress,
+    'gaea_clicker_earninfo':          gaea_clicker_earninfo,
+    # 'gaea_clicker_era3info':          gaea_clicker_era3info,
+    'gaea_clicker_openblindbox':      gaea_clicker_openblindbox,
     'gaea_clicker_godhoodinfo':       gaea_clicker_godhoodinfo,
     # 'gaea_clicker_godhoodid':         gaea_clicker_godhoodid,
-    # 'gaea_clicker_godhoodgrowthinfo': gaea_clicker_godhoodgrowthinfo,
     # 'gaea_clicker_godhoodemotion':    gaea_clicker_godhoodemotion,
+    # 'gaea_clicker_godhoodgrowthinfo': gaea_clicker_godhoodgrowthinfo,
     'gaea_clicker_godhoodtransfer':   gaea_clicker_godhoodtransfer,
-    # 'gaea_clicker_era3info':          gaea_clicker_era3info,
-    'gaea_clicker_earninfo':          gaea_clicker_earninfo,
-    'gaea_clicker_referralreword':    gaea_clicker_referralreword,
-    'gaea_clicker_openblindbox':      gaea_clicker_openblindbox,
-    'gaea_clicker_invitereward':      gaea_clicker_invitereward,
-    'gaea_clicker_inviteclaimed':     gaea_clicker_inviteclaimed,
+    'gaea_clicker_godhoodreward':     gaea_clicker_godhoodreward,
+    'gaea_clicker_godhoodclaimed':    gaea_clicker_godhoodclaimed,
+    # 'gaea_clicker_referralreword':    gaea_clicker_referralreword,
     'gaea_clicker_emotionreward':     gaea_clicker_emotionreward,
     'gaea_clicker_emotionclaimed':    gaea_clicker_emotionclaimed,
     'gaea_clicker_choicereward':      gaea_clicker_choicereward,
@@ -74,11 +75,11 @@ MODULE_MAPPING = {
     'gaea_clicker_dailycheckin':      gaea_clicker_dailycheckin,
     'gaea_clicker_medalcheckin':      gaea_clicker_medalcheckin,
     'gaea_clicker_aitrain':           gaea_clicker_aitrain,
-    'gaea_clicker_deeptrain':         gaea_clicker_deeptrain,
-    'gaea_clicker_tickettrain':  gaea_clicker_tickettrain,
-    'gaea_clicker_deepchoice':        gaea_clicker_deepchoice,
-    'gaea_clicker_ticketchoice': gaea_clicker_ticketchoice,
     'gaea_clicker_traincheckin':      gaea_clicker_traincheckin,
+    'gaea_clicker_deeptrain':         gaea_clicker_deeptrain,
+    'gaea_clicker_tickettrain':       gaea_clicker_tickettrain,
+    'gaea_clicker_deepchoice':        gaea_clicker_deepchoice,
+    'gaea_clicker_ticketchoice':      gaea_clicker_ticketchoice,
     'gaea_clicker_alltask':           gaea_clicker_alltask,
 }
 # 预编译正则表达式
@@ -148,7 +149,7 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
             continue
 
         count+=1
-        logger.debug(f"run task_id: {data_id} create gaea_run_modules task")
+        # logger.debug(f"run task_id: {data_id} create gaea_run_modules task")
         tasks.append(asyncio.create_task(
             limit_concurrency(
                 semaphore,
@@ -206,17 +207,17 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🚀 Gaea tasks - login",                        'gaea_clicker_login',              shortcut_key="b"),
                     Choice("🚀 Gaea tasks - session",                      'gaea_clicker_session',            shortcut_key="c"),
                     Choice("🔥 Gaea tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="d"),
-                    Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="e"),
-                    # Choice("🐌 Gaea tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="f"), # 购买神格卡 - inviter
+                    Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="e"),
+                    # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="f"), # 第三纪信息 - era3
+                    Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="f"),
+                    Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="g"),
+                    # Choice("🐌 Gaea tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="g"), # 购买神格卡 - inviter
+                    # Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="g"), # 上传神格情绪
                     # Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="g"), # ID卡等级信息 - exp
-                    # Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="h"), # 上传神格情绪
-                    Choice("🔥 Gaea tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="f"), # 划转
-                    # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="i"), # 第三纪信息
-                    Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="g"),
-                    Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="h"),
-                    Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="i"),
-                    Choice("🔥 Gaea tasks - invitereward",                 'gaea_clicker_invitereward',       shortcut_key="l"),
-                    Choice("🐌 Gaea tasks - inviteclaimed",                'gaea_clicker_inviteclaimed',      shortcut_key="m"),
+                    Choice("🔥 Gaea tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="h"), # USD划转
+                    Choice("🔥 Gaea tasks - godhoodreward",                'gaea_clicker_godhoodreward',      shortcut_key="i"),
+                    Choice("🐌 Gaea tasks - godhoodclaimed",               'gaea_clicker_godhoodclaimed',     shortcut_key="m"),
+                    # Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="m"), # 邀请奖励
                     Choice("🔥 Gaea tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="n"),
                     Choice("🐌 Gaea tasks - emotionclaimed",               'gaea_clicker_emotionclaimed',     shortcut_key="o"),
                     Choice("🔥 Gaea tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="p"),
@@ -235,9 +236,9 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🔥 Gaea daily tasks - dailycheckin   (☀️)",    'gaea_clicker_dailycheckin',       shortcut_key="1"),
                     Choice("🔥 Gaea daily tasks - medalcheckin   (☀️)",    'gaea_clicker_medalcheckin',       shortcut_key="2"),
                     Choice("🔥 Gaea daily tasks - aitrain        (☀️)",    'gaea_clicker_aitrain',            shortcut_key="3"),
-                    Choice("🔥 Gaea daily tasks - deeptrain      (☀️)",    'gaea_clicker_deeptrain',          shortcut_key="4"),
-                    Choice("🔥 Gaea daily tasks - tickettrain    (☀️)",    'gaea_clicker_tickettrain',        shortcut_key="5"),
-                    Choice("🔥 Gaea daily tasks - traincheckin   (☀️)",    'gaea_clicker_traincheckin',       shortcut_key="6"),
+                    Choice("🔥 Gaea daily tasks - traincheckin   (☀️)",    'gaea_clicker_traincheckin',       shortcut_key="4"),
+                    Choice("🔥 Gaea daily tasks - deeptrain      (☀️)",    'gaea_clicker_deeptrain',          shortcut_key="5"),
+                    Choice("🔥 Gaea daily tasks - tickettrain    (☀️)",    'gaea_clicker_tickettrain',        shortcut_key="6"),
                     Choice("🔥 Gaea daily tasks - deepchoice     (☀️)",    'gaea_clicker_deepchoice',         shortcut_key="7"),
                     Choice("🔥 Gaea daily tasks - ticketchoice   (☀️)",    'gaea_clicker_ticketchoice',       shortcut_key="8"),
                     Choice("🔥 Gaea daily tasks - alltask        (☀️)",    'gaea_clicker_alltask',            shortcut_key="9"),

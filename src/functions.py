@@ -5,6 +5,26 @@ from src.gaea_dailytask import GaeaDailyTask
 
 # gaea
 
+## 过期任务
+async def gaea_clicker_checkin(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-checkin")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_checkin()
+
+async def gaea_clicker_signin(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-signin")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_signin()
+
+async def gaea_clicker_referralreword(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-referralreword")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_referralreword()
+
+## 基础任务
 async def gaea_clicker_register(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-register")
@@ -29,35 +49,11 @@ async def gaea_clicker_earninfo(runname, id, userid, email, passwd, prikey, toke
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_earninfo()
 
-async def gaea_clicker_godhoodinfo(runname, id, userid, email, passwd, prikey, token, proxy):
-    if platform.system().lower() == 'windows':
-        os.system("title gaea-godhoodinfo")
-    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_godhoodinfo()
-
-async def gaea_clicker_godhoodgrowthinfo(runname, id, userid, email, passwd, prikey, token, proxy):
-    if platform.system().lower() == 'windows':
-        os.system("title gaea-godhoodgrowthinfo")
-    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_godhoodgrowthinfo()
-
 async def gaea_clicker_era3info(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-era3info")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_era3info()
-
-async def gaea_clicker_openblindbox(runname, id, userid, email, passwd, prikey, token, proxy):
-    if platform.system().lower() == 'windows':
-        os.system("title gaea-openblindbox")
-    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_openblindbox()
-
-async def gaea_clicker_referralreword(runname, id, userid, email, passwd, prikey, token, proxy):
-    if platform.system().lower() == 'windows':
-        os.system("title gaea-referralreword")
-    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_referralreword()
 
 async def gaea_clicker_bindaddress(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
@@ -65,17 +61,53 @@ async def gaea_clicker_bindaddress(runname, id, userid, email, passwd, prikey, t
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_bindaddress()
 
-async def gaea_clicker_invitereward(runname, id, userid, email, passwd, prikey, token, proxy):
+async def gaea_clicker_openblindbox(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
-        os.system("title gaea-invitereward")
+        os.system("title gaea-openblindbox")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_invitereward()
+    return await daily_task.daily_clicker_openblindbox()
 
-async def gaea_clicker_inviteclaimed(runname, id, userid, email, passwd, prikey, token, proxy):
+async def gaea_clicker_godhoodinfo(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
-        os.system("title gaea-inviteclaimed")
+        os.system("title gaea-godhoodinfo")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_inviteclaimed()
+    return await daily_task.daily_clicker_godhoodinfo()
+
+async def gaea_clicker_godhoodid(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-godhoodid")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_godhoodid()
+
+async def gaea_clicker_godhoodemotion(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-godhoodemotion")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_godhoodemotion()
+
+async def gaea_clicker_godhoodgrowthinfo(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-godhoodgrowthinfo")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_godhoodgrowthinfo()
+
+async def gaea_clicker_godhoodtransfer(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-godhoodtransfer")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_godhoodtransfer()
+
+async def gaea_clicker_godhoodreward(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-godhoodreward")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_godhoodreward()
+
+async def gaea_clicker_godhoodclaimed(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-godhoodclaimed")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_godhoodclaimed()
 
 async def gaea_clicker_emotionreward(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
@@ -137,12 +169,6 @@ async def gaea_clicker_anftoblate(runname, id, userid, email, passwd, prikey, to
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_anftoblate()
 
-async def gaea_clicker_fundspooling(runname, id, userid, email, passwd, prikey, token, proxy):
-    if platform.system().lower() == 'windows':
-        os.system("title gaea-fundspooling")
-    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_fundspooling()
-
 async def gaea_clicker_milestoneburn(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-milestoneburn")
@@ -155,35 +181,11 @@ async def gaea_clicker_milestoneclaim(runname, id, userid, email, passwd, prikey
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_milestoneclaim()
 
-async def gaea_clicker_godhoodid(runname, id, userid, email, passwd, prikey, token, proxy):
+async def gaea_clicker_fundspooling(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
-        os.system("title gaea-godhoodid")
+        os.system("title gaea-fundspooling")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_godhoodid()
-
-async def gaea_clicker_godhoodemotion(runname, id, userid, email, passwd, prikey, token, proxy):
-    if platform.system().lower() == 'windows':
-        os.system("title gaea-godhoodemotion")
-    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_godhoodemotion()
-
-async def gaea_clicker_godhoodtransfer(runname, id, userid, email, passwd, prikey, token, proxy):
-    if platform.system().lower() == 'windows':
-        os.system("title gaea-godhoodtransfer")
-    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_godhoodtransfer()
-
-async def gaea_clicker_checkin(runname, id, userid, email, passwd, prikey, token, proxy):
-    if platform.system().lower() == 'windows':
-        os.system("title gaea-checkin")
-    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_checkin()
-
-async def gaea_clicker_signin(runname, id, userid, email, passwd, prikey, token, proxy):
-    if platform.system().lower() == 'windows':
-        os.system("title gaea-signin")
-    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_signin()
+    return await daily_task.daily_clicker_fundspooling()
 
 async def gaea_clicker_dailycheckin(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
