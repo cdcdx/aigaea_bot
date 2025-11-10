@@ -16,8 +16,8 @@ from src.functions import (
     gaea_clicker_register, gaea_clicker_login, 
     gaea_clicker_session, gaea_clicker_bindaddress, 
     gaea_clicker_openblindbox, gaea_clicker_buytickets,
-    gaea_clicker_era3info, 
     gaea_clicker_earninfo, 
+    gaea_clicker_era3info, gaea_clicker_referralreword,
     gaea_clicker_godhoodid, gaea_clicker_godhoodemotion, 
     gaea_clicker_godhoodinfo, gaea_clicker_godhoodgrowthinfo, 
     gaea_clicker_godhoodtransfer,
@@ -28,7 +28,7 @@ from src.functions import (
     gaea_clicker_anftmint, gaea_clicker_anftinfo, gaea_clicker_anftoblate,
     gaea_clicker_milestoneburn,gaea_clicker_milestoneclaim,
     gaea_clicker_fundspooling,
-    gaea_clicker_checkin, gaea_clicker_signin, gaea_clicker_referralreword,
+    gaea_clicker_checkin, gaea_clicker_signin, 
     gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, 
     gaea_clicker_aitrain, gaea_clicker_traincheckin,
     gaea_clicker_deeptrain, gaea_clicker_tickettrain, 
@@ -50,6 +50,7 @@ MODULE_MAPPING = {
     'gaea_clicker_buytickets':        gaea_clicker_buytickets,
     'gaea_clicker_earninfo':          gaea_clicker_earninfo,
     # 'gaea_clicker_era3info':          gaea_clicker_era3info,
+    # 'gaea_clicker_referralreword':    gaea_clicker_referralreword,
     # 'gaea_clicker_godhoodid':         gaea_clicker_godhoodid,
     # 'gaea_clicker_godhoodemotion':    gaea_clicker_godhoodemotion,
     'gaea_clicker_godhoodinfo':       gaea_clicker_godhoodinfo,
@@ -57,7 +58,6 @@ MODULE_MAPPING = {
     'gaea_clicker_godhoodtransfer':   gaea_clicker_godhoodtransfer,
     'gaea_clicker_godhoodreward':     gaea_clicker_godhoodreward,
     'gaea_clicker_godhoodclaimed':    gaea_clicker_godhoodclaimed,
-    # 'gaea_clicker_referralreword':    gaea_clicker_referralreword,
     'gaea_clicker_emotionreward':     gaea_clicker_emotionreward,
     'gaea_clicker_emotionclaimed':    gaea_clicker_emotionclaimed,
     'gaea_clicker_choicereward':      gaea_clicker_choicereward,
@@ -118,8 +118,13 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
     datas = get_data_for_token(runname)
     logger.info(f"runname: {runname} runeq: {runeq} rungt: {rungt} runlt: {runlt}")
 
+    # datas随机乱序
+    data_pairs = list(enumerate(datas, start=1))
+    random.shuffle(data_pairs)
+
     if runthread<=0:
-        runthread = sum(1 for id, _ in enumerate(datas, start=1) if is_id_valid(id, runeq, rungt, runlt))
+        # runthread = sum(1 for id, _ in enumerate(datas, start=1) if is_id_valid(id, runeq, rungt, runlt))
+        runthread = sum(1 for id, _ in enumerate(data_pairs , start=1) if is_id_valid(id, runeq, rungt, runlt)) # datas随机乱序
         # logger.debug(f"runthread: {runthread}")
     runthread = min(runthread, 10)
     logger.info(f"runname: {runname} runthread: {runthread}")
@@ -127,7 +132,8 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
 
     count=0
     tasks = []
-    for data_id, data in enumerate(datas, start=1):
+    # for data_id, data in enumerate(datas, start=1):
+    for data_id, data in data_pairs: # datas随机乱序
         if not is_id_valid(data_id, runeq, rungt, runlt):
             continue
 
@@ -217,6 +223,7 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🔥 Gaea tasks - buytickets",                   'gaea_clicker_buytickets',         shortcut_key="f"),
                     Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="g"),
                     # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="g"), # 第三纪信息 - era3
+                    # Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="m"), # 邀请奖励
                     # Choice("🐌 Gaea tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="g"), # 购买神格卡 - inviter
                     # Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="g"), # 上传神格情绪
                     # Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="g"), # 神格卡信息
@@ -224,7 +231,6 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🔥 Gaea tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="h"), # USD划转
                     Choice("🔥 Gaea tasks - godhoodreward",                'gaea_clicker_godhoodreward',      shortcut_key="i"),
                     Choice("🐌 Gaea tasks - godhoodclaimed",               'gaea_clicker_godhoodclaimed',     shortcut_key="m"),
-                    # Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="m"), # 邀请奖励
                     Choice("🔥 Gaea tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="n"),
                     Choice("🐌 Gaea tasks - emotionclaimed",               'gaea_clicker_emotionclaimed',     shortcut_key="o"),
                     Choice("🔥 Gaea tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="p"),
@@ -263,7 +269,7 @@ def main(runname, runeq, rungt, runlt, runthread):
         cprint(f"\nShutting down due to: {type(e).__name__}", color='light_yellow')
         sys.exit()
 
-# ----------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------- input
 
 def choose_emotion():
     emotion_int = select(
@@ -355,7 +361,7 @@ def random_ticket():
     
     return task_random.strip()
 
-# ----------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------- auto
 
 async def gaea_daily_task_modules(module, runname, runeq, runthread):
     module_mapping = {

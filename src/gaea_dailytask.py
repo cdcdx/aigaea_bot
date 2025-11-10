@@ -2485,7 +2485,7 @@ class GaeaDailyTask:
             logger.debug(f"current_nftlevel: {current_nftlevel}")
             time.sleep(1)
 
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_snftmint already completed | current_nftlevel: {current_nftlevel}")
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft mint already completed | current_nftlevel: {current_nftlevel}")
             return current_nftlevel
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft_ismint_clicker except: {error}")
@@ -2731,7 +2731,7 @@ class GaeaDailyTask:
             logger.debug(f"current_nftticket: {current_nftticket}")
             time.sleep(1)
 
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_anftmint already completed | current_nftticket: {current_nftticket}")
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft mint already completed | current_nftticket: {current_nftticket}")
             return current_nftticket
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft_ismint_clicker except: {error}")
