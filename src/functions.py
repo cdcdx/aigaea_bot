@@ -73,11 +73,11 @@ async def gaea_clicker_buytickets(runname, id, userid, email, passwd, prikey, to
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_buytickets()
 
-async def gaea_clicker_godhoodid(runname, id, userid, email, passwd, prikey, token, proxy):
+async def gaea_clicker_buygodhoodid(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
-        os.system("title gaea-godhoodid")
+        os.system("title gaea-buygodhoodid")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
-    return await daily_task.daily_clicker_godhoodid()
+    return await daily_task.daily_clicker_buygodhoodid()
 
 async def gaea_clicker_godhoodemotion(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':

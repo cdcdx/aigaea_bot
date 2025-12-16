@@ -18,7 +18,7 @@ from src.functions import (
     gaea_clicker_openblindbox, gaea_clicker_buytickets,
     gaea_clicker_earninfo, 
     gaea_clicker_era3info, gaea_clicker_referralreword,
-    gaea_clicker_godhoodid, gaea_clicker_godhoodemotion, 
+    gaea_clicker_buygodhoodid, gaea_clicker_godhoodemotion, 
     gaea_clicker_godhoodinfo, gaea_clicker_godhoodgrowthinfo, 
     gaea_clicker_godhoodtransfer,
     gaea_clicker_godhoodreward, gaea_clicker_godhoodclaimed,
@@ -53,7 +53,7 @@ MODULE_MAPPING = {
     'gaea_clicker_earninfo':          gaea_clicker_earninfo,
     'gaea_clicker_era3info':          gaea_clicker_era3info,
     'gaea_clicker_referralreword':    gaea_clicker_referralreword,
-    'gaea_clicker_godhoodid':         gaea_clicker_godhoodid,
+    'gaea_clicker_buygodhoodid':      gaea_clicker_buygodhoodid,
     'gaea_clicker_godhoodemotion':    gaea_clicker_godhoodemotion,
     'gaea_clicker_godhoodinfo':       gaea_clicker_godhoodinfo,
     'gaea_clicker_godhoodgrowthinfo': gaea_clicker_godhoodgrowthinfo,
@@ -246,7 +246,7 @@ def main1(runname, runeq, rungt, runlt, runthread):
                     Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="g"),
                     # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="g"), # 第三纪信息 - era3
                     # Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="m"), # 邀请奖励
-                    # Choice("🐌 Gaea tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="g"), # 购买神格卡 - inviter
+                    # Choice("🐌 Gaea tasks - buygodhoodid",                 'gaea_clicker_buygodhoodid',       shortcut_key="g"), # 购买神格卡 - inviter
                     # Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="g"), # 上传神格情绪
                     # Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="g"), # 神格卡信息
                     # Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="g"), # ID卡等级信息 - exp
@@ -344,10 +344,9 @@ def handle_basic_tasks(runname, runeq, rungt, runlt, runthread):
             Choice("🚀 Basic tasks - session",                      'gaea_clicker_session',            shortcut_key="3"),
             Choice("🔥 Basic tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="4"),
             Choice("🔥 Basic tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="5"),
-            Choice("🐌 Basic tasks - buytickets",                   'gaea_clicker_buytickets',         shortcut_key="6"),
-            Choice("🔥 Basic tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="7"),
-            Choice("🔥 Basic tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="8"), # 第三纪信息 - era3
-            Choice("🔥 Basic tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="9"), # 邀请奖励
+            Choice("🔥 Basic tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="6"),
+            Choice("🔥 Basic tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="7"), # 第三纪信息 - era3
+            Choice("🔥 Basic tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="8"), # 邀请奖励
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
@@ -363,7 +362,7 @@ def handle_godhood_tasks(runname, runeq, rungt, runlt, runthread):
     answer = select(
         'GodHood Tasks',
         choices=[
-            Choice("🐌 GodHood tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="1"), # 购买神格卡 - inviter
+            Choice("🐌 GodHood tasks - buygodhoodid",                 'gaea_clicker_buygodhoodid',       shortcut_key="1"), # 购买神格卡 - inviter
             Choice("🔥 GodHood tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="2"), # 上传神格情绪
             Choice("🔥 GodHood tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="3"), # 神格卡信息
             Choice("🔥 GodHood tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="4"), # ID卡等级信息 - exp
@@ -453,11 +452,12 @@ def handle_funds_tasks(runname, runeq, rungt, runlt, runthread):
     answer = select(
         'Funds Tasks',
         choices=[
-            Choice("🔥 Funds tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="1"),
-            Choice("🐌 Funds tasks - emotionclaimed",               'gaea_clicker_emotionclaimed',     shortcut_key="2"),
-            Choice("🔥 Funds tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="3"),
-            Choice("🐌 Funds tasks - choiceclaimed",                'gaea_clicker_choiceclaimed',      shortcut_key="4"),
-            Choice("🐌 Funds tasks - fundspooling",                 'gaea_clicker_fundspooling',       shortcut_key="5"),
+            Choice("🐌 Funds tasks - buytickets",                   'gaea_clicker_buytickets',         shortcut_key="1"), # 购票
+            Choice("🔥 Funds tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="2"),
+            Choice("🐌 Funds tasks - emotionclaimed",               'gaea_clicker_emotionclaimed',     shortcut_key="3"),
+            Choice("🔥 Funds tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="4"),
+            Choice("🐌 Funds tasks - choiceclaimed",                'gaea_clicker_choiceclaimed',      shortcut_key="5"),
+            Choice("🐌 Funds tasks - fundspooling",                 'gaea_clicker_fundspooling',       shortcut_key="6"),
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
