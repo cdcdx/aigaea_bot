@@ -1201,6 +1201,139 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker except: {error}")
 
     # -------------------------------------------------------------------------- 任务
+    
+    ## 任务列表
+    async def missionlist_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- missionlist
+            url = GAEA_API.rstrip('/')+'/api/mission/list'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers,
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker except: {error}")
+
+    async def missionconnect_clicker(self, mission_id) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- missionconnect
+            if 10 < int(mission_id) < 99:
+                url = GAEA_API.rstrip('/')+'/api/auth/retweet/connect?id='+str(mission_id)
+            elif 110 < int(mission_id) < 199:
+                url = GAEA_API.rstrip('/')+'/api/auth/partner/connect?id='+str(mission_id)
+            else:
+                return None
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker except: {error}")
+
+    async def missioncomplete_clicker(self, mission_id) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- missioncomplete
+            url = GAEA_API.rstrip('/')+'/api/mission/complete-mission'
+            json_data = {
+                "mission_id": f"{mission_id}"
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker json_data: {json_data}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker except: {error}")
 
     ## 里程碑任务
     async def milestonelist_clicker(self) -> None:
@@ -4451,6 +4584,67 @@ class GaeaDailyTask:
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_anftoblate except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_mission(self, type=1):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            eth_address = clicker_response['eth_address']
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
+            if eth_address is None and eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
+            # -------------------------------------------------------------------------- missionlist
+            clicker_response = await self.missionlist_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist clicker_response: {clicker_response}")
+            
+            for mission in clicker_response:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} mission: {mission}")
+                mission_id = int(mission['id'])
+                if mission['status'] == 0 and type == 1:  # 0 - 未开始 / 1 - 可领取 / 2 - 已结束
+                    if not (10 < mission_id < 99 or 110 < mission_id < 199):
+                        logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} mission id: {mission_id} skiped")
+                        continue
+                    # -------------------------------------------------------------------------- missionconnect
+                    clicker_response = await self.missionconnect_clicker(mission_id)
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect: {clicker_response} - mission: {mission_id}")
+                    
+                    delay = random.randint(10, 20)
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect delay: {delay} seconds")
+                    await asyncio.sleep(delay)
+                elif mission['status'] == 1 and type == 2:  # 0 - 未开始 / 1 - 可领取 / 2 - 已结束
+                    # -------------------------------------------------------------------------- missioncomplete
+                    clicker_response = await self.missioncomplete_clicker(mission_id)
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete: {clicker_response} - mission: {mission_id}")
+
+                    delay = random.randint(10, 20)
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete delay: {delay} seconds")
+                    await asyncio.sleep(delay)
+                
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} mission task completed")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_mission except: {error}")
             return f"ERROR: {error}"
 
     @helper
