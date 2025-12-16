@@ -40,7 +40,7 @@ from src.functions import (
 from src.gaea_client import GaeaClient
 from src.task_manager import TaskManager
 from utils.helpers import get_data_for_token
-from utils.services import resolve_domain, get_web3_config, choose_emotion, choose_task_emotion, choose_choice, choose_task_choice, input_ticket, random_ticket
+from utils.services import resolve_domain, get_web3_config, choose_emotion, choose_task_emotion, choose_choice, choose_task_choice, input_ticket, random_ticket, choose_ticket_level
 from config import set_envsion, GAEA_API
 
 MODULE_MAPPING = {

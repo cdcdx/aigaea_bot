@@ -711,224 +711,6 @@ class GaeaDailyTask:
 
     # -------------------------------------------------------------------------- 日常任务
 
-    ## 购票任务
-    async def ticket_levels_list_clicker(self) -> None:
-        try:
-            headers = self.getheaders()
-            if len(headers.get('Authorization', None)) < 50:
-                # -------------------------------------------------------------------------- login
-                login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
-            # -------------------------------------------------------------------------- ticket_levels
-            url = GAEA_API.rstrip('/')+'/api/ticket/levels'
-
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker url: {url}")
-            response = await self.client.make_request(
-                method='GET', 
-                url=url, 
-                headers=headers
-            )
-            if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker {response}")
-                raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker {response}")
-
-            code = response.get('code', None)
-            if code in [200, 201]:
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
-                return response['data']
-            else:
-                message = response.get('msg', None)
-                if message is None:
-                    message = f"{response.get('detail', None)}" 
-                if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker => {message}")
-                    return message
-                else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker ERROR: {message}")
-                    raise Exception(message)
-        except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_levels_list_clicker except: {error}")
-
-    async def ticket_generate_clicker(self, level: int| None = 1) -> None:
-        try:
-            headers = self.getheaders()
-            if len(headers.get('Authorization', None)) < 50:
-                # -------------------------------------------------------------------------- login
-                login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
-            # -------------------------------------------------------------------------- ticketbox_generate
-            url = GAEA_API.rstrip('/')+'/api/ticket/generate'
-
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker url: {url}")
-            response = await self.client.make_request(
-                method='GET', 
-                url=url, 
-                headers=headers
-            )
-            if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker {response}")
-                raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker {response}")
-
-            code = response.get('code', None)
-            if code in [200, 201]:
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
-                return response['data']
-            else:
-                message = response.get('msg', None)
-                if message is None:
-                    message = f"{response.get('detail', None)}" 
-                if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker => {message}")
-                    return message
-                else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker ERROR: {message}")
-                    raise Exception(message)
-        except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker except: {error}")
-
-    async def ticket_buy_clicker(self, tick_level, tick_rebate, final_hash) -> None:
-        try:
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker tick_level: {tick_level}")
-            # -------------------------------------------------------------------------- ticket_buy
-            web3_obj = connect_web3_rpc()
-            
-            current_timestamp = int(time.time())
-            logger.debug(f"current_timestamp: {current_timestamp}")
-
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            if sender_balance_eth == 0:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
-                return "ERRRO"
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-
-            # 购票合约地址
-            ticket_address = Web3.to_checksum_address(CONTRACT_TICKET)
-            ticket_contract = web3_obj.eth.contract(address=ticket_address, abi=contract_abi_ticket)
-
-            if tick_level==1:
-                # 是否购买过超级折扣
-                ticket_level_one = ticket_contract.functions.hasPurchasedLevel1( sender_address ).call()
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} | ticket_level_one: {ticket_level_one}")
-                if ticket_level_one:
-                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} | Already purchased level1")
-                    raise Exception("Already purchased level1")
-
-            # 查询票价
-            ticket_info = ticket_contract.functions.getTicketLevel( tick_level ).call()
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} | ticket_info: {ticket_info}")
-            ticket_price = ticket_info[0]
-            if ticket_price == 0:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_price: {ticket_price}")
-                raise Exception("ticket_price: 0")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_price: {ticket_price}")
-            # --------------------------------------------------------------------------
-
-            # USDC合约地址
-            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
-            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
-            # 账户余额
-            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
-            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
-            # 购卡合约授权金额
-            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, ticket_address).call()
-            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
-
-            # USDC余额不足
-            if ticket_price > sender_balance_usdc:
-                # logger.error(f"Ooops! Insufficient USDC balance.")
-                raise Exception("Insufficient USDC balance.")
-                return "Insufficient USDC balance."
-
-            # 购票合约USDC授权额度不足
-            if ticket_price > sender_allowance_usdc:
-                logger.error(f"Ooops! Insufficient USDC authorization amount for ticket_contract.")
-                # raise Exception("Insufficient USDC authorization amount for ticket_contract.")
-
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
-                # 构建交易 - 购卡合约金额授权
-                transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
-                logger.debug(f"approve transaction: {transaction}")
-
-                # 发送交易
-                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
-                if tx_success == False:
-                    logger.error(f"Ooops! Failed to send_transaction.")
-                    raise Exception("Failed to send_transaction.")
-                
-                logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
-
-            # --------------------------------------------------------------------------
-
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
-            # 构建交易 - 购买
-            transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
-            logger.debug(f"buyTickets transaction: {transaction}")
-
-            # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
-            if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
-                raise Exception("Failed to send_transaction.")
-            
-            logger.success(f"The buyTickets transaction was send successfully! - tick_level: {tick_level} tick_rebate: {tick_rebate}")
-            return "SUCCESS"
-        except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker except: {error}")
-
     ## 日常签到
     async def dailylist_clicker(self) -> None:
         try:
@@ -1599,7 +1381,7 @@ class GaeaDailyTask:
 
     # -------------------------------------------------------------------------- 上链
     
-    ## 神格卡
+    ## 买神格卡
     async def godhoodid_clicker(self) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
@@ -1961,6 +1743,183 @@ class GaeaDailyTask:
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodclaimed_clicker except: {error}")
+
+    ## 购票
+    async def ticket_generate_clicker(self, level: int| None = 1) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- ticketbox_generate
+            url = GAEA_API.rstrip('/')+'/api/ticket/generate?level='+str(level)
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker {response}")
+                raise Exception(response)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker except: {error}")
+
+    async def ticket_buy_clicker(self, tick_level, tick_rebate, final_hash) -> None:
+        try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker tick_level: {tick_level}")
+            # -------------------------------------------------------------------------- ticket_buy
+            web3_obj = connect_web3_rpc()
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            if sender_balance_eth == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
+                return "ERRRO"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+
+            # 购票合约地址
+            ticket_address = Web3.to_checksum_address(CONTRACT_TICKET)
+            ticket_contract = web3_obj.eth.contract(address=ticket_address, abi=contract_abi_ticket)
+
+            if tick_level==1:
+                # 是否购买过超级折扣
+                ticket_level_one = ticket_contract.functions.hasPurchasedLevel1( sender_address ).call()
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} | ticket_level_one: {ticket_level_one}")
+                if ticket_level_one:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} | Already purchased level1")
+                    raise Exception("Already purchased level1")
+
+            # 查询票价
+            ticket_info = ticket_contract.functions.getTicketLevel( tick_level ).call()
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} | ticket_info: {ticket_info}")
+            ticket_price = ticket_info[0]
+            if ticket_price == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_price: {ticket_price}")
+                raise Exception("ticket_price: 0")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_price: {ticket_price}")
+            # --------------------------------------------------------------------------
+
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            # 账户余额
+            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
+            # 购卡合约授权金额
+            sender_allowance_usdc = usdc_contract.functions.allowance(sender_address, ticket_address).call()
+            logger.debug(f"sender_allowance_usdc: {sender_allowance_usdc}") # 无穷大 115792089237316195423570985008687907853269984665640564039457584007913129.639935
+
+            # USDC余额不足
+            if ticket_price > sender_balance_usdc:
+                # logger.error(f"Ooops! Insufficient USDC balance.")
+                raise Exception("Insufficient USDC balance.")
+                return "Insufficient USDC balance."
+
+            # 购票合约USDC授权额度不足
+            if ticket_price > sender_allowance_usdc:
+                logger.error(f"Ooops! Insufficient USDC authorization amount for ticket_contract.")
+                # raise Exception("Insufficient USDC authorization amount for ticket_contract.")
+
+                # 获取当前Gas
+                latest_block = web3_obj.eth.get_block('latest')
+                if latest_block is None:
+                    logger.error(f"Ooops! Failed to eth.get_block.")
+                    raise Exception("Failed to eth.get_block.")
+                base_fee_per_gas = latest_block['baseFeePerGas']
+                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
+                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
+
+                # 构建交易 - 购卡合约金额授权
+                transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(
+                    {
+                        "chainId": WEB3_CHAINID,
+                        "from": sender_address,
+                        "gas": 20000000,  # 最大 Gas 用量
+                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                    }
+                )
+                logger.debug(f"approve transaction: {transaction}")
+
+                # 发送交易
+                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                if tx_success == False:
+                    logger.error(f"Ooops! Failed to send_transaction.")
+                    raise Exception("Failed to send_transaction.")
+                
+                logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
+
+            # --------------------------------------------------------------------------
+
+            # 获取当前Gas
+            latest_block = web3_obj.eth.get_block('latest')
+            if latest_block is None:
+                logger.error(f"Ooops! Failed to eth.get_block.")
+                raise Exception("Failed to eth.get_block.")
+            base_fee_per_gas = latest_block['baseFeePerGas']
+            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
+            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
+            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
+            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
+
+            # 构建交易 - 购买
+            transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(
+                    {
+                        "chainId": WEB3_CHAINID,
+                        "from": sender_address,
+                        "gas": 20000000,  # 最大 Gas 用量
+                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
+                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
+                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
+                    }
+                )
+            logger.debug(f"buyTickets transaction: {transaction}")
+
+            # 发送交易
+            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            if tx_success == False:
+                logger.error(f"Ooops! Failed to send_transaction.")
+                raise Exception("Failed to send_transaction.")
+            
+            logger.success(f"The buyTickets transaction was send successfully! - tick_level: {tick_level} tick_rebate: {tick_rebate}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker except: {error}")
 
     ## 深度训练
     async def is_deeptrain_clicker(self) -> None:
