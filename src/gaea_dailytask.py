@@ -3985,7 +3985,7 @@ class GaeaDailyTask:
                 return "ERROR"
             
             # -------------------------------------------------------------------------- godhoodgrowthinfo
-            clicker_response =  await self.godhoodgrowthinfo_clicker()
+            clicker_response = await self.godhoodgrowthinfo_clicker()
             if clicker_response is None:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo response: {clicker_response}")
@@ -4063,12 +4063,12 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- godhoodreward
-            await self.godhoodreward_clicker(eth_address)
+            clicker_response = await self.godhoodreward_clicker(eth_address)
             if clicker_response is None or str(clicker_response).find("ERROR") > -1:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward response: {clicker_response}")
             
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} {clicker_response}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} {clicker_response['']}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodreward except: {error}")
@@ -4142,7 +4142,7 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- emotionreward
             clicker_response = await self.emotionreward_clicker(eth_address)
-            if clicker_response is None:
+            if clicker_response is None or str(clicker_response).find("ERROR") > -1:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward response: {clicker_response}")
             
@@ -4220,7 +4220,7 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- choicereward
             clicker_response = await self.choicereward_clicker(eth_address)
-            if clicker_response is None:
+            if clicker_response is None or str(clicker_response).find("ERROR") > -1:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward response: {clicker_response}")
             
@@ -4311,7 +4311,7 @@ class GaeaDailyTask:
             #     return "SUCCESS"
             
             # -------------------------------------------------------------------------- snftmint
-            nftlevel =  await self.snft_ismint_clicker()
+            nftlevel = await self.snft_ismint_clicker()
             if nftlevel == 4: # 已铸造,最大等级,不可升级
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftlevel: {nftlevel} | No need to upgrade to the maximum level.")
                 return "SUCCESS"
@@ -4369,7 +4369,7 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- snftmint
-            nftlevel =  await self.snft_ismint_clicker()
+            nftlevel = await self.snft_ismint_clicker()
             if nftlevel is None:
                 return "ERROR"
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftlevel: {nftlevel}")
@@ -4474,7 +4474,7 @@ class GaeaDailyTask:
                 return "ERROR"
             
             # -------------------------------------------------------------------------- anftmint
-            nftticket =  await self.anft_ismint_clicker()
+            nftticket = await self.anft_ismint_clicker()
             if nftticket == current_ticket: # 已铸造,无效升级
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftticket: {nftticket} | No need to upgrade if at the same ticket.")
                 return "SUCCESS"
@@ -4530,7 +4530,7 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- anftmint
-            nftticket =  await self.anft_ismint_clicker()
+            nftticket = await self.anft_ismint_clicker()
             if nftticket is None:
                 return "ERROR"
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftticket: {nftticket}")
@@ -5177,7 +5177,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- isdeeptrain
-            clicker_response =  await self.is_deeptrain_clicker()
+            clicker_response = await self.is_deeptrain_clicker()
             if clicker_response is False:
                 # -------------------------------------------------------------------------- 5 deeptrain
                 await self.deeptrain_clicker(emotion, eth_address)
@@ -5245,7 +5245,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- isdeeptrain
-            clicker_response =  await self.is_deeptrain_clicker()
+            clicker_response = await self.is_deeptrain_clicker()
             if clicker_response is False:
                 # -------------------------------------------------------------------------- ticketbox_list
                 clicker_response = await self.ticketbox_list_clicker()
@@ -5301,7 +5301,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- isdeepchoice
-            clicker_response =  await self.is_deepchoice_clicker()
+            clicker_response = await self.is_deepchoice_clicker()
             if clicker_response is False:
                 # -------------------------------------------------------------------------- godhoodinfo
                 clicker_response = await self.godhoodinfo_clicker()
@@ -5352,7 +5352,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- 5 tickettrain
-            clicker_response =  await self.is_deepchoice_clicker()
+            clicker_response = await self.is_deepchoice_clicker()
             if clicker_response is False:
                 # -------------------------------------------------------------------------- ticketbox_list
                 clicker_response = await self.ticketbox_list_clicker()
@@ -5454,7 +5454,6 @@ class GaeaDailyTask:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 dailycheckin_clicker delay: {delay} seconds")
                 await asyncio.sleep(delay)
 
-
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # alltask
             if clicker_response is None:
@@ -5546,7 +5545,7 @@ class GaeaDailyTask:
             # --------------------------------------------------------------------------
             
             # -------------------------------------------------------------------------- deeptrain
-            clicker_response =  await self.is_deeptrain_clicker()
+            clicker_response = await self.is_deeptrain_clicker()
             if clicker_response is False:
                 task=os.environ.get('TASK_EMOTION', '0')
                 if task == '0':  # no train
@@ -5638,7 +5637,7 @@ class GaeaDailyTask:
             choice_detail=f"{choice}_{delay}_{is_godhood_id}"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
             # -------------------------------------------------------------------------- deepchoice
-            clicker_response =  await self.is_deepchoice_clicker()
+            clicker_response = await self.is_deepchoice_clicker()
             if clicker_response is False:
                 task=os.environ.get('TASK_CHOICE', '0')
                 if task == '0':  # no train
