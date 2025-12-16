@@ -27,6 +27,7 @@ from src.functions import (
     gaea_clicker_snftmint, gaea_clicker_snftinfo, gaea_clicker_snftoblate,
     gaea_clicker_anftmint, gaea_clicker_anftinfo, gaea_clicker_anftoblate,
     gaea_clicker_milestoneburn,gaea_clicker_milestoneclaim,
+    gaea_clicker_visionburn, gaea_clicker_visionclaim,
     gaea_clicker_fundspooling,
     gaea_clicker_checkin, gaea_clicker_signin, 
     gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, 
@@ -38,7 +39,7 @@ from src.functions import (
 from src.gaea_client import GaeaClient
 from src.task_manager import TaskManager
 from utils.helpers import get_data_for_token
-from utils.services import resolve_domain, get_web3_config
+from utils.services import resolve_domain, get_web3_config, choose_emotion, choose_task_emotion, choose_choice, choose_task_choice, input_ticket, random_ticket
 from config import set_envsion, GAEA_API
 
 MODULE_MAPPING = {
@@ -49,12 +50,12 @@ MODULE_MAPPING = {
     'gaea_clicker_openblindbox':      gaea_clicker_openblindbox,
     'gaea_clicker_buytickets':        gaea_clicker_buytickets,
     'gaea_clicker_earninfo':          gaea_clicker_earninfo,
-    # 'gaea_clicker_era3info':          gaea_clicker_era3info,
-    # 'gaea_clicker_referralreword':    gaea_clicker_referralreword,
-    # 'gaea_clicker_godhoodid':         gaea_clicker_godhoodid,
-    # 'gaea_clicker_godhoodemotion':    gaea_clicker_godhoodemotion,
+    'gaea_clicker_era3info':          gaea_clicker_era3info,
+    'gaea_clicker_referralreword':    gaea_clicker_referralreword,
+    'gaea_clicker_godhoodid':         gaea_clicker_godhoodid,
+    'gaea_clicker_godhoodemotion':    gaea_clicker_godhoodemotion,
     'gaea_clicker_godhoodinfo':       gaea_clicker_godhoodinfo,
-    # 'gaea_clicker_godhoodgrowthinfo': gaea_clicker_godhoodgrowthinfo,
+    'gaea_clicker_godhoodgrowthinfo': gaea_clicker_godhoodgrowthinfo,
     'gaea_clicker_godhoodtransfer':   gaea_clicker_godhoodtransfer,
     'gaea_clicker_godhoodreward':     gaea_clicker_godhoodreward,
     'gaea_clicker_godhoodclaimed':    gaea_clicker_godhoodclaimed,
@@ -70,6 +71,8 @@ MODULE_MAPPING = {
     'gaea_clicker_anftoblate':        gaea_clicker_anftoblate,
     'gaea_clicker_milestoneburn':     gaea_clicker_milestoneburn,
     'gaea_clicker_milestoneclaim':    gaea_clicker_milestoneclaim,
+    'gaea_clicker_visionburn':        gaea_clicker_visionburn,
+    'gaea_clicker_visionclaim':       gaea_clicker_visionclaim,
     'gaea_clicker_fundspooling':      gaea_clicker_fundspooling,
     # 'gaea_clicker_checkin':           gaea_clicker_checkin,
     # 'gaea_clicker_signin':            gaea_clicker_signin,
@@ -89,17 +92,31 @@ EMAIL_REGEX_PATTERN = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9
 # ----------------------------------------------------------------------------------------------------------
 
 def is_id_valid(id, runeq, rungt, runlt):
-    match = False
-    if runeq != 0:
-        match |= (id == runeq)
-    if rungt != 0 and runlt != 0:
-        match |= (rungt < id < runlt)
-    elif rungt != 0:
-        match |= (id > rungt)
-    elif runlt != 0:
-        match |= (id < runlt)
-    elif runeq == 0 and rungt == 0 and runlt == 0:
-        match |= True
+    # 处理范围条件优先
+    if rungt != 0 and runlt != 0: # 同时指定了大于和小于条件
+        range_match = (rungt < id < runlt)
+    elif rungt != 0: # 只指定了大于条件
+        range_match = (id > rungt)
+    elif runlt != 0: # 只指定了小于条件
+        range_match = (id < runlt)
+    else: # 没有指定范围条件
+        range_match = True
+    
+    # 处理等于条件
+    if isinstance(runeq, list):
+        if len(runeq) == 0: # runeq 为空列表，匹配所有 ID
+            equal_match = True
+        else: # runeq 包含元素，只匹配列表中的 ID
+            equal_match = (id in runeq)
+    else: # 向后兼容，处理旧的单数值情况
+        if runeq != 0:
+            equal_match = (id == runeq)
+        else:
+            equal_match = True
+    
+    # 综合判断：必须同时满足范围条件和等于条件
+    match = range_match and equal_match
+    # logger.debug(f"is_id_valid - id: {id} runeq: {runeq} rungt: {rungt} runlt: {runlt} match: {match}")
     return match
 
 async def limit_concurrency(semaphore, func, **kwargs):
@@ -207,7 +224,9 @@ def run_module(module, runname, runeq, rungt, runlt, runthread):
     
     asyncio.run(gaea_run_modules(module=module, runname=runname, runeq=runeq, rungt=rungt, runlt=runlt, runthread=runthread))
 
-def main(runname, runeq, rungt, runlt, runthread):
+# ---------------------------------------------------------------------------------------------------------- main one
+
+def main1(runname, runeq, rungt, runlt, runthread):
     try:
         while True:
             if platform.system().lower() == 'windows':
@@ -243,6 +262,8 @@ def main(runname, runeq, rungt, runlt, runthread):
                     Choice("🐌 Gaea tasks - anftoblate   (🈷️)",            'gaea_clicker_anftoblate',         shortcut_key="w"),
                     Choice("🔥 Gaea tasks - milestoneburn",                'gaea_clicker_milestoneburn',      shortcut_key="x"),
                     Choice("🐌 Gaea tasks - milestoneclaim",               'gaea_clicker_milestoneclaim',     shortcut_key="y"),
+                    # Choice("🔥 Gaea tasks - visionburn",                   'gaea_clicker_visionburn',         shortcut_key="x"),
+                    # Choice("🐌 Gaea tasks - visionclaim",                  'gaea_clicker_visionclaim',        shortcut_key="y"),
                     Choice("🐌 Fund tasks - fundspooling",                 'gaea_clicker_fundspooling',       shortcut_key="z"),
                     # Choice("🔥 Gaea daily tasks - checkin        (☀️)",    'gaea_clicker_checkin',            shortcut_key="1"),
                     # Choice("🔥 Gaea daily tasks - signin         (☀️)",    'gaea_clicker_signin',             shortcut_key="2"),
@@ -269,98 +290,177 @@ def main(runname, runeq, rungt, runlt, runthread):
         cprint(f"\nShutting down due to: {type(e).__name__}", color='light_yellow')
         sys.exit()
 
-# ---------------------------------------------------------------------------------------------------------- input
+# ---------------------------------------------------------------------------------------------------------- main two
 
-def choose_emotion():
-    emotion_int = select(
-        'Choose Emotion',
+def main(runname, runeq, rungt, runlt, runthread):
+    try:
+        while True:
+            if platform.system().lower() == 'windows':
+                os.system("title main")
+            answer = select(
+                'Choose Category',
+                choices=[
+                    Choice("🚀 Basic Tasks",         'basic_tasks',    shortcut_key="1"),
+                    Choice("🚀 GodHood Tasks",       'godhood_tasks',  shortcut_key="2"),
+                    Choice("🚀 NFTs Tasks",          'nfts_tasks',     shortcut_key="3"),
+                    Choice("🔥 Daily Tasks",         'daily_tasks',    shortcut_key="4"),
+                    Choice("🐌 Advanced Tasks",      'advanced_tasks', shortcut_key="5"),
+                    Choice("🐌 Funds Tasks",         'funds_tasks',    shortcut_key="6"),
+                    Choice('❌ Exit', "exit", shortcut_key="0")
+                ],
+                use_shortcuts=True,
+                use_arrow_keys=True,
+            ).ask()
+
+            if answer == 'basic_tasks':
+                handle_basic_tasks(runname, runeq, rungt, runlt, runthread)
+            elif answer == 'godhood_tasks':
+                handle_godhood_tasks(runname, runeq, rungt, runlt, runthread)
+            elif answer == 'nfts_tasks':
+                handle_nfts_tasks(runname, runeq, rungt, runlt, runthread)
+            elif answer == 'daily_tasks':
+                handle_daily_tasks(runname, runeq, rungt, runlt, runthread)
+            elif answer == 'advanced_tasks':
+                handle_advanced_tasks(runname, runeq, rungt, runlt, runthread)
+            elif answer == 'funds_tasks':
+                handle_funds_tasks(runname, runeq, rungt, runlt, runthread)
+            elif answer == 'exit':
+                sys.exit()
+    except (KeyboardInterrupt, asyncio.CancelledError, SystemExit) as e:
+        cprint(f"\nShutting down due to: {type(e).__name__}", color='light_yellow')
+        sys.exit()
+
+def handle_basic_tasks(runname, runeq, rungt, runlt, runthread):
+    answer = select(
+        'Basic Tasks',
         choices=[
-            Choice("Random",   '0', shortcut_key="0"),
-            Choice("Postive",  '1', shortcut_key="1"),
-            Choice("Neutral",  '2', shortcut_key="2"),
-            Choice("Negative", '3', shortcut_key="3"),
+            Choice("🚀 Gaea tasks - register",                     'gaea_clicker_register',           shortcut_key="1"),
+            Choice("🚀 Gaea tasks - login",                        'gaea_clicker_login',              shortcut_key="2"),
+            Choice("🚀 Gaea tasks - session",                      'gaea_clicker_session',            shortcut_key="3"),
+            Choice("🔥 Gaea tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="4"),
+            Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="5"),
+            Choice("🔥 Gaea tasks - buytickets",                   'gaea_clicker_buytickets',         shortcut_key="6"),
+            Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="7"),
+            Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="8"), # 第三纪信息 - era3
+            Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="9"), # 邀请奖励
+            Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
         use_arrow_keys=True,
     ).ask()
-    return emotion_int
 
-def choose_task_emotion():
-    task_choice = select(
-        'Choose Task',
+    if answer in MODULE_MAPPING:
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+    elif answer == 'back':
+        return
+
+def handle_godhood_tasks(runname, runeq, rungt, runlt, runthread):
+    answer = select(
+        'GodHood Tasks',
         choices=[
-            Choice("No Train",     '0', shortcut_key="0"),
-            Choice("DeepTrain",    '1', shortcut_key="1"),
-            Choice("TicketTrain",  '2', shortcut_key="2"),
+            Choice("🐌 Gaea tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="1"), # 购买神格卡 - inviter
+            Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="2"), # 上传神格情绪
+            Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="3"), # 神格卡信息
+            Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="4"), # ID卡等级信息 - exp
+            Choice("🔥 Gaea tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="5"), # USD划转
+            Choice("🔥 Gaea tasks - godhoodreward",                'gaea_clicker_godhoodreward',      shortcut_key="6"),
+            Choice("🐌 Gaea tasks - godhoodclaimed",               'gaea_clicker_godhoodclaimed',     shortcut_key="7"),
+            Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
         use_arrow_keys=True,
     ).ask()
-    return task_choice
 
-def choose_choice():
-    choice_int = select(
-        'Choose Choice',
+    if answer in MODULE_MAPPING:
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+    elif answer == 'back':
+        return
+
+def handle_nfts_tasks(runname, runeq, rungt, runlt, runthread):
+    answer = select(
+        'NFTs Tasks',
         choices=[
-            Choice("Random",      '0', shortcut_key="0"),
-            Choice("Safeguarding",'1', shortcut_key="1"),
-            Choice("Balancing",   '2', shortcut_key="2"),
-            Choice("Advancing",   '3', shortcut_key="3"),
-            Choice("Leaping",     '4', shortcut_key="4"),
+            Choice("🐌 Gaea tasks - snftmint",                     'gaea_clicker_snftmint',           shortcut_key="1"),
+            Choice("🔥 Gaea tasks - snftinfo",                     'gaea_clicker_snftinfo',           shortcut_key="2"),
+            Choice("🐌 Gaea tasks - snftoblate   (🈷️)",            'gaea_clicker_snftoblate',         shortcut_key="3"),
+            Choice("🐌 Gaea tasks - anftmint",                     'gaea_clicker_anftmint',           shortcut_key="4"),
+            Choice("🔥 Gaea tasks - anftinfo",                     'gaea_clicker_anftinfo',           shortcut_key="5"),
+            Choice("🐌 Gaea tasks - anftoblate   (🈷️)",            'gaea_clicker_anftoblate',         shortcut_key="6"),
+            Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
         use_arrow_keys=True,
     ).ask()
-    return choice_int
 
-def choose_task_choice():
-    task_choice = select(
-        'Choose Task',
+    if answer in MODULE_MAPPING:
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+    elif answer == 'back':
+        return
+
+def handle_daily_tasks(runname, runeq, rungt, runlt, runthread):
+    answer = select(
+        'Daily Tasks',
         choices=[
-            Choice("No Choice",    '0', shortcut_key="0"),
-            Choice("DeepChoice",   '1', shortcut_key="1"),
-            Choice("TicketChoice", '2', shortcut_key="2"),
+            # Choice("🔥 Gaea daily tasks - checkin        (☀️)",    'gaea_clicker_checkin',            shortcut_key="1"),
+            # Choice("🔥 Gaea daily tasks - signin         (☀️)",    'gaea_clicker_signin',             shortcut_key="2"),
+            Choice("🔥 Gaea daily tasks - dailycheckin   (☀️)",    'gaea_clicker_dailycheckin',       shortcut_key="1"),
+            Choice("🔥 Gaea daily tasks - medalcheckin   (☀️)",    'gaea_clicker_medalcheckin',       shortcut_key="2"),
+            Choice("🔥 Gaea daily tasks - aitrain        (☀️)",    'gaea_clicker_aitrain',            shortcut_key="3"),
+            Choice("🔥 Gaea daily tasks - traincheckin   (☀️)",    'gaea_clicker_traincheckin',       shortcut_key="4"),
+            Choice("🔥 Gaea daily tasks - deeptrain      (☀️)",    'gaea_clicker_deeptrain',          shortcut_key="5"),
+            Choice("🔥 Gaea daily tasks - tickettrain    (☀️)",    'gaea_clicker_tickettrain',        shortcut_key="6"),
+            Choice("🔥 Gaea daily tasks - deepchoice     (☀️)",    'gaea_clicker_deepchoice',         shortcut_key="7"),
+            Choice("🔥 Gaea daily tasks - ticketchoice   (☀️)",    'gaea_clicker_ticketchoice',       shortcut_key="8"),
+            Choice("🔥 Gaea daily tasks - alltask        (☀️)",    'gaea_clicker_alltask',            shortcut_key="9"),
+            Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
         use_arrow_keys=True,
     ).ask()
-    return task_choice
 
-def choose_ticket_level():
-    task_ticket_level = select(
-        'Choose Ticket',
+    if answer in MODULE_MAPPING:
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+    elif answer == 'back':
+        return
+
+def handle_advanced_tasks(runname, runeq, rungt, runlt, runthread):
+    answer = select(
+        'Advanced Tasks',
         choices=[
-            Choice("No ticket", '0', shortcut_key="0"),
-            Choice("Level 1 - 1.99 U",   '1', shortcut_key="1"),
-            Choice("Level 2 - 19.9 U",   '2', shortcut_key="2"),
-            Choice("Level 3 - 69.9 U",   '3', shortcut_key="3"),
-            # Choice("Level 3 - 39.9 U",   '3', shortcut_key="3"),
-            # Choice("Level 4 - 99.9 U",   '4', shortcut_key="4"),
+            Choice("🔥 Gaea tasks - milestoneburn",                'gaea_clicker_milestoneburn',      shortcut_key="1"),
+            Choice("🐌 Gaea tasks - milestoneclaim",               'gaea_clicker_milestoneclaim',     shortcut_key="2"),
+            Choice("🔥 Gaea tasks - visionburn",                   'gaea_clicker_visionburn',         shortcut_key="3"),
+            Choice("🐌 Gaea tasks - visionclaim",                  'gaea_clicker_visionclaim',        shortcut_key="4"),
+            Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
         use_arrow_keys=True,
     ).ask()
-    return task_ticket_level
 
-def input_ticket():
-    task_ticket = text(
-        'burn ticket (0-No Ticket, 1~200):'
-    ).ask()
-    
-    if task_ticket is None:  # 用户按了 Ctrl+C
-        return '0'
-    
-    return task_ticket.strip()
+    if answer in MODULE_MAPPING:
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+    elif answer == 'back':
+        return
 
-def random_ticket():
-    task_random = text(
-        'random ticket (0-No random, 1~200):'
+def handle_funds_tasks(runname, runeq, rungt, runlt, runthread):
+    answer = select(
+        'Funds Tasks',
+        choices=[
+            Choice("🔥 Gaea tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="1"),
+            Choice("🐌 Gaea tasks - emotionclaimed",               'gaea_clicker_emotionclaimed',     shortcut_key="2"),
+            Choice("🔥 Gaea tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="3"),
+            Choice("🐌 Gaea tasks - choiceclaimed",                'gaea_clicker_choiceclaimed',      shortcut_key="4"),
+            Choice("🐌 Fund tasks - fundspooling",                 'gaea_clicker_fundspooling',       shortcut_key="5"),
+            Choice("⬅ Back", "back", shortcut_key="0")
+        ],
+        use_shortcuts=True,
+        use_arrow_keys=True,
     ).ask()
-    
-    if task_random is None:  # 用户按了 Ctrl+C
-        return '0'
-    
-    return task_random.strip()
+
+    if answer in MODULE_MAPPING:
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+    elif answer == 'back':
+        return
 
 # ---------------------------------------------------------------------------------------------------------- auto
 
@@ -432,7 +532,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--run', type=int, default=0)
     parser.add_argument('-d', '--debug', type=bool, default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument('-n', '--name', type=str, default='')
-    parser.add_argument('-e', '--equal', type=int, default=0)
+    parser.add_argument('-e', '--equal', nargs='+', type=int, default=[])
     parser.add_argument('-g', '--greater', type=int, default=0)
     parser.add_argument('-l', '--less', type=int, default=0)
     parser.add_argument('-t', '--thread', type=int, default=0)
@@ -441,7 +541,7 @@ if __name__ == '__main__':
     run_run = int(args.run)
     run_debug = bool(args.debug)
     run_name = str(args.name)
-    run_eq = int(args.equal)
+    run_eq = list(args.equal)
     run_gt = int(args.greater)
     run_lt = int(args.less)
     run_thread = int(args.thread)

@@ -62,8 +62,20 @@ class GaeaClient:
                 logger.debug(f"id: {self.id} make_request retry: {int(total_time/30)} url: {url}")
                 async with self.session.request( method=method, url=url, headers=headers, data=data, params=params, json=json, ssl=False ) as response:
                     logger.debug(f"id: {self.id} make_request response.status: {response.status}")
+                    content_type = response.content_type or ""
                     if response.status in [200, 201]:
-                        data = await response.json()
+                        # data = await response.json()
+                        # 根据内容类型决定如何处理响应
+                        if 'application/json' in content_type:
+                            data = await response.json()
+                        else:
+                            text = await response.text()
+                            # 尝试解析为JSON，如果失败则创建一个包含文本的字典
+                            try:
+                                data = await response.json()
+                            except:
+                                data = {"text": text, "content_type": content_type}
+                        
                         if isinstance(data, dict):
                             errors = data.get('errors', None)
                         elif isinstance(data, list) and isinstance(data[0], dict):
@@ -78,7 +90,17 @@ class GaeaClient:
                         else:
                             raise Exception(f"Bad request to {self.__class__.__name__}({method}) 2 API: {str(errors[0]['message']).splitlines()[0]}")
                     elif response.status in [400,401,402,403,404,405,410,500,503]:
-                        data = await response.json()
+                        # data = await response.json()
+                        # 根据内容类型决定如何处理响应
+                        if 'application/json' in content_type:
+                            data = await response.json()
+                        else:
+                            text = await response.text()
+                            # 尝试解析为JSON，如果失败则创建一个包含文本的字典
+                            try:
+                                data = await response.json()
+                            except:
+                                data = {"text": text, "content_type": content_type, "status": response.status}
                         logger.debug(f"id: {self.id} make_request data: {data}")
                         return data
                     raise Exception(f"Bad request to {self.__class__.__name__}({method}) status: {response.status} API: {str(await response.text()).splitlines()[0]}")
@@ -158,8 +180,20 @@ async def make_request(method:str = 'GET', url:str = None, headers:dict = None, 
             async with ClientSession() as session:
                 async with session.request( method=method, url=url, headers=headers, data=data, params=params, json=json, ssl=False ) as response:
                     logger.debug(f"make_request response.status: {response.status}")
+                    content_type = response.content_type or ""
                     if response.status in [200, 201]:
-                        data = await response.json()
+                        # data = await response.json()
+                        # 根据内容类型决定如何处理响应
+                        if 'application/json' in content_type:
+                            data = await response.json()
+                        else:
+                            text = await response.text()
+                            # 尝试解析为JSON，如果失败则创建一个包含文本的字典
+                            try:
+                                data = await response.json()
+                            except:
+                                data = {"text": text, "content_type": content_type}
+                        
                         if isinstance(data, dict):
                             errors = data.get('errors', None)
                         elif isinstance(data, list) and isinstance(data[0], dict):
@@ -174,7 +208,17 @@ async def make_request(method:str = 'GET', url:str = None, headers:dict = None, 
                         else:
                             raise Exception(f"Bad request to ({method}) 2 API: {str(errors[0]['message']).splitlines()[0]}")
                     elif response.status in [400,401,402,403,404,405,410,500,503]:
-                        data = await response.json()
+                        # data = await response.json()
+                        # 根据内容类型决定如何处理响应
+                        if 'application/json' in content_type:
+                            data = await response.json()
+                        else:
+                            text = await response.text()
+                            # 尝试解析为JSON，如果失败则创建一个包含文本的字典
+                            try:
+                                data = await response.json()
+                            except:
+                                data = {"text": text, "content_type": content_type, "status": response.status}
                         logger.debug(f"make_request data: {data}")
                         return data
                     raise Exception(f"Bad request to ({method}) status: {response.status} API: {str(await response.text()).splitlines()[0]}")

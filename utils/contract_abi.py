@@ -50,6 +50,47 @@ contract_abi_usdc = [
     },
 ]
 
+contract_abi_invite = [
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "_addr", "type": "address" }
+		],
+		"name": "inviter",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "", "type": "address" }
+		],
+		"name": "isgodhoodID",
+		"outputs": [
+			{ "internalType": "bool", "name": "", "type": "bool" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+ 	{
+		"inputs": [
+			{ "internalType": "address", "name": "", "type": "address" }
+		],
+		"name": "invitereward",
+		"outputs": [
+			{ "internalType": "uint256", "name": "", "type": "uint256" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "claimrewards",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+]
+
 contract_abi_emotion = [
     {
         "inputs": [
@@ -143,6 +184,45 @@ contract_abi_emotion2 = [
     },
 ]
 
+contract_abi_emotion3 = [
+    {
+        "inputs": [
+            { "internalType": "address", "name": "_addr", "type": "address" }
+        ],
+        "name": "isBet",
+        "outputs": [
+            { "internalType": "bool", "name": "", "type": "bool" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getBaseInfo",
+        "outputs": [
+            { "internalType": "uint256", "name": "period", "type": "uint256" },
+            { "internalType": "uint256", "name": "periodBaseUSD", "type": "uint256" },
+            { "internalType": "uint256", "name": "periodPrice", "type": "uint256" },
+            { "internalType": "uint256", "name": "periodEndStamp", "type": "uint256" },
+            { "internalType": "uint256", "name": "periodDuration", "type": "uint256" },
+            { "internalType": "uint256", "name": "periodPoolUSD", "type": "uint256" },
+            { "internalType": "enum DeepTrain.PeriodStatus", "name": "periodStatus", "type": "uint8" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            { "internalType": "address", "name": "_addr", "type": "address" },
+            { "internalType": "uint8", "name": "_emotion", "type": "uint8" }
+        ],
+        "name": "bet",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+]
+
 contract_abi_reward = [
     {
         "inputs": [
@@ -164,137 +244,25 @@ contract_abi_reward = [
     },
 ]
 
-contract_abi_invite = [
-	{
-		"inputs": [
-			{ "internalType": "address", "name": "_addr", "type": "address" }
-		],
-		"name": "inviter",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{ "internalType": "address", "name": "", "type": "address" }
-		],
-		"name": "isgodhoodID",
-		"outputs": [
-			{ "internalType": "bool", "name": "", "type": "bool" }
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
- 	{
-		"inputs": [
-			{ "internalType": "address", "name": "", "type": "address" }
-		],
-		"name": "invitereward",
-		"outputs": [
-			{ "internalType": "uint256", "name": "", "type": "uint256" }
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "claimrewards",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-]
-
-contract_abi_mint = [
+contract_abi_reward3 = [
     {
         "inputs": [
-            {"internalType": "address","name": "addr","type": "address"}
+            { "internalType": "address", "name": "_addr", "type": "address" }
         ],
-        "name": "getTokenID",
+        "name": "getRewards",
         "outputs": [
-            {"internalType": "uint256","name": "","type": "uint256"}
+            { "internalType": "uint256", "name": "", "type": "uint256" }
         ],
         "stateMutability": "view",
         "type": "function"
     },
     {
-        "inputs": [
-            {"internalType": "address","name": "addr","type": "address"}
-        ],
-        "name": "getTokenLevel",
-        "outputs": [
-            {"internalType": "uint256","name": "","type": "uint256"}
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {"internalType": "address","name": "addr","type": "address"}
-        ],
-        "name": "getTokenTicket",
-        "outputs": [
-            {"internalType": "uint256","name": "","type": "uint256"}
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {"internalType": "uint256","name": "tokenId","type": "uint256"}
-        ],
-        "name": "getTokenIDAddr",
-        "outputs": [
-            {"internalType": "address","name": "","type": "address"}
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {"internalType": "uint256","name": "tokenId","type": "uint256"}
-        ],
-        "name": "getTokenIDLevel",
-        "outputs": [
-            {"internalType": "uint256","name": "","type": "uint256"}
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {"internalType": "uint256","name": "tokenId","type": "uint256"}
-        ],
-        "name": "getTokenIDTicket",
-        "outputs": [
-            {"internalType": "uint256","name": "","type": "uint256"}
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {"internalType": "uint256","name": "_level","type": "uint256"},
-            {"internalType": "uint256","name": "_number","type": "uint256"},
-            {"internalType": "bytes","name": "_finalhash","type": "bytes"}
-        ],
-        "name": "mintNFT",
+        "inputs": [],
+        "name": "claim",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
     },
-    {
-        "inputs": [
-            {"internalType": "uint256","name": "_tokenId","type": "uint256"},
-            {"internalType": "uint256","name": "_level","type": "uint256"},
-            {"internalType": "uint256","name": "_number","type": "uint256"},
-            {"internalType": "bytes","name": "_finalhash","type": "bytes"}
-        ],
-        "name": "upgradeNFT",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    }
 ]
 
 contract_abi_choice = [
@@ -395,6 +363,98 @@ contract_abi_award = [
         "stateMutability": "nonpayable",
         "type": "function"
     },
+]
+
+contract_abi_mint = [
+    {
+        "inputs": [
+            {"internalType": "address","name": "addr","type": "address"}
+        ],
+        "name": "getTokenID",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address","name": "addr","type": "address"}
+        ],
+        "name": "getTokenLevel",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address","name": "addr","type": "address"}
+        ],
+        "name": "getTokenTicket",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256","name": "tokenId","type": "uint256"}
+        ],
+        "name": "getTokenIDAddr",
+        "outputs": [
+            {"internalType": "address","name": "","type": "address"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256","name": "tokenId","type": "uint256"}
+        ],
+        "name": "getTokenIDLevel",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256","name": "tokenId","type": "uint256"}
+        ],
+        "name": "getTokenIDTicket",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256","name": "_level","type": "uint256"},
+            {"internalType": "uint256","name": "_number","type": "uint256"},
+            {"internalType": "bytes","name": "_finalhash","type": "bytes"}
+        ],
+        "name": "mintNFT",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256","name": "_tokenId","type": "uint256"},
+            {"internalType": "uint256","name": "_level","type": "uint256"},
+            {"internalType": "uint256","name": "_number","type": "uint256"},
+            {"internalType": "bytes","name": "_finalhash","type": "bytes"}
+        ],
+        "name": "upgradeNFT",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
 ]
 
 contract_abi_ticket = [
