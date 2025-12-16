@@ -242,7 +242,7 @@ def main1(runname, runeq, rungt, runlt, runthread):
                     Choice("🚀 Gaea tasks - session",                      'gaea_clicker_session',            shortcut_key="c"),
                     Choice("🔥 Gaea tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="d"),
                     Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="e"),
-                    Choice("🔥 Gaea tasks - buytickets",                   'gaea_clicker_buytickets',         shortcut_key="f"),
+                    Choice("🐌 Gaea tasks - buytickets",                   'gaea_clicker_buytickets',         shortcut_key="f"),
                     Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="g"),
                     # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="g"), # 第三纪信息 - era3
                     # Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="m"), # 邀请奖励
@@ -250,7 +250,7 @@ def main1(runname, runeq, rungt, runlt, runthread):
                     # Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="g"), # 上传神格情绪
                     # Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="g"), # 神格卡信息
                     # Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="g"), # ID卡等级信息 - exp
-                    Choice("🔥 Gaea tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="h"), # USD划转
+                    Choice("🐌 Gaea tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="h"), # USD划转
                     Choice("🔥 Gaea tasks - godhoodreward",                'gaea_clicker_godhoodreward',      shortcut_key="i"),
                     Choice("🐌 Gaea tasks - godhoodclaimed",               'gaea_clicker_godhoodclaimed',     shortcut_key="m"),
                     Choice("🔥 Gaea tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="n"),
@@ -263,8 +263,8 @@ def main1(runname, runeq, rungt, runlt, runthread):
                     Choice("🐌 Gaea tasks - anftmint",                     'gaea_clicker_anftmint',           shortcut_key="u"),
                     Choice("🔥 Gaea tasks - anftinfo",                     'gaea_clicker_anftinfo',           shortcut_key="v"),
                     Choice("🐌 Gaea tasks - anftoblate   (🈷️)",            'gaea_clicker_anftoblate',         shortcut_key="w"),
-                    Choice("🔥 Gaea tasks - missionconnect",               'gaea_clicker_missionconnect',     shortcut_key="w"),
-                    Choice("🔥 Gaea tasks - missioncomplete",              'gaea_clicker_missioncomplete',    shortcut_key="w"),
+                    # Choice("🔥 Gaea tasks - missionconnect",               'gaea_clicker_missionconnect',     shortcut_key="w"),
+                    # Choice("🔥 Gaea tasks - missioncomplete",              'gaea_clicker_missioncomplete',    shortcut_key="w"),
                     Choice("🔥 Gaea tasks - milestoneburn",                'gaea_clicker_milestoneburn',      shortcut_key="x"),
                     Choice("🐌 Gaea tasks - milestoneclaim",               'gaea_clicker_milestoneclaim',     shortcut_key="y"),
                     # Choice("🔥 Gaea tasks - visionburn",                   'gaea_clicker_visionburn',         shortcut_key="x"),
@@ -339,15 +339,15 @@ def handle_basic_tasks(runname, runeq, rungt, runlt, runthread):
     answer = select(
         'Basic Tasks',
         choices=[
-            Choice("🚀 Gaea tasks - register",                     'gaea_clicker_register',           shortcut_key="1"),
-            Choice("🚀 Gaea tasks - login",                        'gaea_clicker_login',              shortcut_key="2"),
-            Choice("🚀 Gaea tasks - session",                      'gaea_clicker_session',            shortcut_key="3"),
-            Choice("🔥 Gaea tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="4"),
-            Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="5"),
-            Choice("🔥 Gaea tasks - buytickets",                   'gaea_clicker_buytickets',         shortcut_key="6"),
-            Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="7"),
-            Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="8"), # 第三纪信息 - era3
-            Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="9"), # 邀请奖励
+            Choice("🚀 Basic tasks - register",                     'gaea_clicker_register',           shortcut_key="1"),
+            Choice("🚀 Basic tasks - login",                        'gaea_clicker_login',              shortcut_key="2"),
+            Choice("🚀 Basic tasks - session",                      'gaea_clicker_session',            shortcut_key="3"),
+            Choice("🔥 Basic tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="4"),
+            Choice("🔥 Basic tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="5"),
+            Choice("🐌 Basic tasks - buytickets",                   'gaea_clicker_buytickets',         shortcut_key="6"),
+            Choice("🔥 Basic tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="7"),
+            Choice("🔥 Basic tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="8"), # 第三纪信息 - era3
+            Choice("🔥 Basic tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="9"), # 邀请奖励
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
@@ -363,13 +363,13 @@ def handle_godhood_tasks(runname, runeq, rungt, runlt, runthread):
     answer = select(
         'GodHood Tasks',
         choices=[
-            Choice("🐌 Gaea tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="1"), # 购买神格卡 - inviter
-            Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="2"), # 上传神格情绪
-            Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="3"), # 神格卡信息
-            Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="4"), # ID卡等级信息 - exp
-            Choice("🔥 Gaea tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="5"), # USD划转
-            Choice("🔥 Gaea tasks - godhoodreward",                'gaea_clicker_godhoodreward',      shortcut_key="6"),
-            Choice("🐌 Gaea tasks - godhoodclaimed",               'gaea_clicker_godhoodclaimed',     shortcut_key="7"),
+            Choice("🐌 GodHood tasks - godhoodid",                    'gaea_clicker_godhoodid',          shortcut_key="1"), # 购买神格卡 - inviter
+            Choice("🔥 GodHood tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="2"), # 上传神格情绪
+            Choice("🔥 GodHood tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="3"), # 神格卡信息
+            Choice("🔥 GodHood tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="4"), # ID卡等级信息 - exp
+            Choice("🐌 GodHood tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="5"), # USD划转
+            Choice("🔥 GodHood tasks - godhoodreward",                'gaea_clicker_godhoodreward',      shortcut_key="6"),
+            Choice("🐌 GodHood tasks - godhoodclaimed",               'gaea_clicker_godhoodclaimed',     shortcut_key="7"),
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
@@ -385,12 +385,12 @@ def handle_nfts_tasks(runname, runeq, rungt, runlt, runthread):
     answer = select(
         'NFTs Tasks',
         choices=[
-            Choice("🐌 Gaea tasks - snftmint",                     'gaea_clicker_snftmint',           shortcut_key="1"),
-            Choice("🔥 Gaea tasks - snftinfo",                     'gaea_clicker_snftinfo',           shortcut_key="2"),
-            Choice("🐌 Gaea tasks - snftoblate   (🈷️)",            'gaea_clicker_snftoblate',         shortcut_key="3"),
-            Choice("🐌 Gaea tasks - anftmint",                     'gaea_clicker_anftmint',           shortcut_key="4"),
-            Choice("🔥 Gaea tasks - anftinfo",                     'gaea_clicker_anftinfo',           shortcut_key="5"),
-            Choice("🐌 Gaea tasks - anftoblate   (🈷️)",            'gaea_clicker_anftoblate',         shortcut_key="6"),
+            Choice("🐌 NFTs tasks - snftmint",                     'gaea_clicker_snftmint',           shortcut_key="1"),
+            Choice("🔥 NFTs tasks - snftinfo",                     'gaea_clicker_snftinfo',           shortcut_key="2"),
+            Choice("🐌 NFTs tasks - snftoblate   (🈷️)",            'gaea_clicker_snftoblate',         shortcut_key="3"),
+            Choice("🐌 NFTs tasks - anftmint",                     'gaea_clicker_anftmint',           shortcut_key="4"),
+            Choice("🔥 NFTs tasks - anftinfo",                     'gaea_clicker_anftinfo',           shortcut_key="5"),
+            Choice("🐌 NFTs tasks - anftoblate   (🈷️)",            'gaea_clicker_anftoblate',         shortcut_key="6"),
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
@@ -406,17 +406,17 @@ def handle_daily_tasks(runname, runeq, rungt, runlt, runthread):
     answer = select(
         'Daily Tasks',
         choices=[
-            # Choice("🔥 Gaea daily tasks - checkin        (☀️)",    'gaea_clicker_checkin',            shortcut_key="1"),
-            # Choice("🔥 Gaea daily tasks - signin         (☀️)",    'gaea_clicker_signin',             shortcut_key="2"),
-            Choice("🔥 Gaea daily tasks - dailycheckin   (☀️)",    'gaea_clicker_dailycheckin',       shortcut_key="1"),
-            Choice("🔥 Gaea daily tasks - medalcheckin   (☀️)",    'gaea_clicker_medalcheckin',       shortcut_key="2"),
-            Choice("🔥 Gaea daily tasks - aitrain        (☀️)",    'gaea_clicker_aitrain',            shortcut_key="3"),
-            Choice("🔥 Gaea daily tasks - deeptrain      (☀️)",    'gaea_clicker_deeptrain',          shortcut_key="4"),
-            Choice("🔥 Gaea daily tasks - tickettrain    (☀️)",    'gaea_clicker_tickettrain',        shortcut_key="5"),
-            Choice("🔥 Gaea daily tasks - traincheckin   (☀️)",    'gaea_clicker_traincheckin',       shortcut_key="6"),
-            Choice("🔥 Gaea daily tasks - deepchoice     (☀️)",    'gaea_clicker_deepchoice',         shortcut_key="7"),
-            Choice("🔥 Gaea daily tasks - ticketchoice   (☀️)",    'gaea_clicker_ticketchoice',       shortcut_key="8"),
-            Choice("🔥 Gaea daily tasks - alltask        (☀️)",    'gaea_clicker_alltask',            shortcut_key="9"),
+            # Choice("🔥 Daily tasks - checkin        (☀️)",    'gaea_clicker_checkin',            shortcut_key="1"),
+            # Choice("🔥 Daily tasks - signin         (☀️)",    'gaea_clicker_signin',             shortcut_key="2"),
+            Choice("🔥 Daily tasks - dailycheckin   (☀️)",    'gaea_clicker_dailycheckin',       shortcut_key="1"),
+            Choice("🔥 Daily tasks - medalcheckin   (☀️)",    'gaea_clicker_medalcheckin',       shortcut_key="2"),
+            Choice("🔥 Daily tasks - aitrain        (☀️)",    'gaea_clicker_aitrain',            shortcut_key="3"),
+            Choice("🔥 Daily tasks - deeptrain      (☀️)",    'gaea_clicker_deeptrain',          shortcut_key="4"),
+            Choice("🔥 Daily tasks - tickettrain    (☀️)",    'gaea_clicker_tickettrain',        shortcut_key="5"),
+            Choice("🔥 Daily tasks - traincheckin   (☀️)",    'gaea_clicker_traincheckin',       shortcut_key="6"),
+            Choice("🔥 Daily tasks - deepchoice     (☀️)",    'gaea_clicker_deepchoice',         shortcut_key="7"),
+            Choice("🔥 Daily tasks - ticketchoice   (☀️)",    'gaea_clicker_ticketchoice',       shortcut_key="8"),
+            Choice("🔥 Daily tasks - alltask        (☀️)",    'gaea_clicker_alltask',            shortcut_key="9"),
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
@@ -432,12 +432,12 @@ def handle_advanced_tasks(runname, runeq, rungt, runlt, runthread):
     answer = select(
         'Advanced Tasks',
         choices=[
-            Choice("🔥 Gaea tasks - missionconnect",               'gaea_clicker_missionconnect',     shortcut_key="1"),
-            Choice("🔥 Gaea tasks - missioncomplete",              'gaea_clicker_missioncomplete',    shortcut_key="2"),
-            Choice("🔥 Gaea tasks - milestoneburn",                'gaea_clicker_milestoneburn',      shortcut_key="3"),
-            Choice("🐌 Gaea tasks - milestoneclaim",               'gaea_clicker_milestoneclaim',     shortcut_key="4"),
-            Choice("🔥 Gaea tasks - visionburn",                   'gaea_clicker_visionburn',         shortcut_key="5"),
-            Choice("🐌 Gaea tasks - visionclaim",                  'gaea_clicker_visionclaim',        shortcut_key="6"),
+            Choice("🔥 Advanced tasks - missionconnect",               'gaea_clicker_missionconnect',     shortcut_key="1"),
+            Choice("🔥 Advanced tasks - missioncomplete",              'gaea_clicker_missioncomplete',    shortcut_key="2"),
+            Choice("🔥 Advanced tasks - milestoneburn",                'gaea_clicker_milestoneburn',      shortcut_key="3"),
+            Choice("🐌 Advanced tasks - milestoneclaim",               'gaea_clicker_milestoneclaim',     shortcut_key="4"),
+            Choice("🔥 Advanced tasks - visionburn",                   'gaea_clicker_visionburn',         shortcut_key="5"),
+            Choice("🐌 Advanced tasks - visionclaim",                  'gaea_clicker_visionclaim',        shortcut_key="6"),
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
@@ -453,11 +453,11 @@ def handle_funds_tasks(runname, runeq, rungt, runlt, runthread):
     answer = select(
         'Funds Tasks',
         choices=[
-            Choice("🔥 Gaea tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="1"),
-            Choice("🐌 Gaea tasks - emotionclaimed",               'gaea_clicker_emotionclaimed',     shortcut_key="2"),
-            Choice("🔥 Gaea tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="3"),
-            Choice("🐌 Gaea tasks - choiceclaimed",                'gaea_clicker_choiceclaimed',      shortcut_key="4"),
-            Choice("🐌 Fund tasks - fundspooling",                 'gaea_clicker_fundspooling',       shortcut_key="5"),
+            Choice("🔥 Funds tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="1"),
+            Choice("🐌 Funds tasks - emotionclaimed",               'gaea_clicker_emotionclaimed',     shortcut_key="2"),
+            Choice("🔥 Funds tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="3"),
+            Choice("🐌 Funds tasks - choiceclaimed",                'gaea_clicker_choiceclaimed',      shortcut_key="4"),
+            Choice("🐌 Funds tasks - fundspooling",                 'gaea_clicker_fundspooling',       shortcut_key="5"),
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,

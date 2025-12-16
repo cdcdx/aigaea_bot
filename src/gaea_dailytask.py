@@ -1006,7 +1006,7 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
@@ -1051,7 +1051,7 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
@@ -1141,7 +1141,7 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
@@ -1185,7 +1185,7 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
@@ -1274,7 +1274,7 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
@@ -1320,7 +1320,7 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
@@ -1408,8 +1408,8 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['msg']}")
-                return response['msg']
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
             else:
                 message = response.get('msg', None)
                 if message is None:
@@ -1449,8 +1449,8 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['msg']}")
-                return response['msg']
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
             else:
                 message = response.get('msg', None)
                 if message is None:
@@ -1582,8 +1582,8 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['msg']}")
-                return response['msg']
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                return response['data']
             else:
                 message = response.get('msg', None)
                 if message is None:
@@ -1791,7 +1791,7 @@ class GaeaDailyTask:
             code = response.get('code', None)
             if code in [200, 201]:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response}")
-                return response
+                return response['data']
             else:
                 message = response.get('msg', None)
                 if message is None:
@@ -1837,7 +1837,7 @@ class GaeaDailyTask:
             code = response.get('code', None)
             if code in [200, 201]:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response}")
-                return response
+                return response['data']
             else:
                 message = response.get('msg', None)
                 if message is None:
@@ -3426,7 +3426,7 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
@@ -3472,7 +3472,7 @@ class GaeaDailyTask:
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
@@ -4042,7 +4042,7 @@ class GaeaDailyTask:
             clicker_response = await self.godhoodtransfer_clicker()
             if clicker_response is None:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_usd: {blindbox_usd}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer response: {clicker_response} - blindbox_usd: {blindbox_usd}")
             
             delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # godhoodtransfer
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer delay: {delay} seconds")
@@ -4297,7 +4297,7 @@ class GaeaDailyTask:
             clicker_response = await self.snft_generate_clicker()
             if clicker_response is None:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} generate response: {clicker_response}")  # {'nft_score': 19880, 'nft_level': 4, 'nft_role': 'Soul Genesis IV'}
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft generate response: {clicker_response}")  # {'nft_score': 19880, 'nft_level': 4, 'nft_role': 'Soul Genesis IV'}
             current_level = clicker_response['nft_level']
             if current_level == 0: # 无效等级
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_level: {current_level} | Insufficient level.")
@@ -4320,7 +4320,7 @@ class GaeaDailyTask:
                 clicker_response = await self.snft_generate_clicker()
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} generate response: {clicker_response}")  # {'nft_level': 3, 'block_number': 33203269, 'final_hash': '0x46fcb058ce'}
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft generate response: {clicker_response}")  # {'nft_level': 3, 'block_number': 33203269, 'final_hash': '0x46fcb058ce'}
                 if len(self.client.prikey) in [64,66]:
                     nft_level = clicker_response['nft_level']
                     block_number = clicker_response['block_number']
@@ -4420,7 +4420,7 @@ class GaeaDailyTask:
                     clicker_response = await self.snftoblate_clicker(tokenids)
                     if clicker_response is None:
                         return "ERROR"
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate clicker_response: {clicker_response}")
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft oblate response: {clicker_response}")
                 
                     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # snftoblate
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate delay: {delay} seconds")
@@ -4459,7 +4459,7 @@ class GaeaDailyTask:
             clicker_response = await self.anft_generate_clicker()
             if clicker_response is None:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} generate response: {clicker_response}")  # {'nft_score': 19880, 'nft_ticket': 4, 'nft_role': 'Soul Genesis IV'}
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft generate response: {clicker_response}")  # {'nft_score': 19880, 'nft_ticket': 4, 'nft_role': 'Soul Genesis IV'}
             current_ticket = clicker_response['nft_ticket']
             if current_ticket == 0: # 无效等级
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_ticket: {current_ticket} | Insufficient ticket.")
@@ -4476,7 +4476,7 @@ class GaeaDailyTask:
                 clicker_response = await self.anft_generate_clicker()
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} generate response: {clicker_response}")  # {'nft_ticket': 3, 'block_number': 33203269, 'final_hash': '0x46fcb058ce'}
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft generate response: {clicker_response}")  # {'nft_ticket': 3, 'block_number': 33203269, 'final_hash': '0x46fcb058ce'}
                 if len(self.client.prikey) in [64,66]:
                     nft_ticket = clicker_response['nft_ticket']
                     block_number = clicker_response['block_number']
@@ -4576,7 +4576,7 @@ class GaeaDailyTask:
                     clicker_response = await self.anftoblate_clicker(tokenids)
                     if clicker_response is None:
                         return "ERROR"
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate clicker_response: {clicker_response}")
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft oblate response: {clicker_response}")
                 
                     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # anftoblate
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate delay: {delay} seconds")
@@ -4627,7 +4627,7 @@ class GaeaDailyTask:
                         continue
                     # -------------------------------------------------------------------------- missionconnect
                     clicker_response = await self.missionconnect_clicker(mission_id)
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect: {clicker_response} - mission: {mission_id}")
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect response: {clicker_response} - mission: {mission_id}")
                     
                     delay = random.randint(10, 20)
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect delay: {delay} seconds")
@@ -4635,7 +4635,7 @@ class GaeaDailyTask:
                 elif mission['status'] == 1 and type == 2:  # 0 - 未开始 / 1 - 可领取 / 2 - 已结束
                     # -------------------------------------------------------------------------- missioncomplete
                     clicker_response = await self.missioncomplete_clicker(mission_id)
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete: {clicker_response} - mission: {mission_id}")
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete response: {clicker_response} - mission: {mission_id}")
 
                     delay = random.randint(10, 20)
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete delay: {delay} seconds")
@@ -4697,7 +4697,7 @@ class GaeaDailyTask:
                         burn_real = ticket_burn - burn_user
                         # -------------------------------------------------------------------------- milestoneburn
                         clicker_response = await self.milestoneburn_clicker(milestone_id, burn_real)
-                        logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} clicker_response: {clicker_response} - milestone: {milestone_id} burn: {burn_real}")
+                        logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn response: {clicker_response} - milestone: {milestone_id} burn: {burn_real}")
             
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Milestone burn completed")
             return "SUCCESS"
@@ -4743,11 +4743,11 @@ class GaeaDailyTask:
                 if milestone['claim_box'] == 1:
                     # -------------------------------------------------------------------------- milestoneclaim
                     clicker_response = await self.milestoneclaim_clicker(milestone_id, 1)
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} clicker_response: {clicker_response} - claim_box: {milestone_id}")
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneclaim response: {clicker_response} - claim_box: {milestone_id}")
                 if milestone['claim_sxp'] == 1:
                     # -------------------------------------------------------------------------- milestoneclaim
                     clicker_response = await self.milestoneclaim_clicker(milestone_id, 2)
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} clicker_response: {clicker_response} - claim_sxp: {milestone_id}")
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneclaim response: {clicker_response} - claim_sxp: {milestone_id}")
                     
                     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # milestoneclaim
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneclaim delay: {delay} seconds")
@@ -4822,7 +4822,7 @@ class GaeaDailyTask:
                             try:
                                 clicker_response = await self.visionburn_clicker(vision_id, cdkeys[i])
                                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} clicker_response: {clicker_response}")
-                                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} {clicker_response} - vision: {vision_id} burn: {cdkeys[i]} - {i+1}/{burn_attempts}")
+                                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn response: {clicker_response} - vision: {vision_id} burn: {cdkeys[i]} - {i+1}/{burn_attempts}")
                             except Exception as e:
                                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: {str(e)}")
                                 # 继续执行下一个任务而不是中断整个流程
@@ -4875,9 +4875,9 @@ class GaeaDailyTask:
                 vision_id = int(vision['id'])
                 # -------------------------------------------------------------------------- visionclaimed
                 clicker_response = await self.visionclaimed_clicker()
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} clicker_response: {clicker_response} - vision_id: {vision_id}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed response: {clicker_response} - vision_id: {vision_id}")
 
-                delay = random.randint(10, 20)
+                delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # visionclaimed
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed delay: {delay} seconds")
                 await asyncio.sleep(delay)
             
@@ -5234,7 +5234,7 @@ class GaeaDailyTask:
                 clicker_response = await self.ticket_deeptrain_clicker(cdkeys[0], emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain {clicker_response}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tickettrain response: {clicker_response}")
             
                 delay = random.randint(60, 90)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain delay: {delay} seconds")
@@ -5277,7 +5277,7 @@ class GaeaDailyTask:
                     return "ERROR"
                 is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
-                delay = random.randint(20, 40) * 2
+                delay = random.randint(60, 90)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
                 choice=os.environ.get('CHOOSE_CHOICE', '0')
@@ -5339,7 +5339,7 @@ class GaeaDailyTask:
                     return "ERROR"
                 is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
-                delay = random.randint(20, 40) * 2
+                delay = random.randint(60, 90)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
                 choice=os.environ.get('CHOOSE_CHOICE', '0')
@@ -5355,8 +5355,8 @@ class GaeaDailyTask:
                 clicker_response = await self.ticket_deepchoice_clicker(cdkeys[0], choice_detail)
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice {clicker_response}")
-            
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketchoice response: {clicker_response}")
+
                 delay = random.randint(60, 90)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deepchoice delay: {delay} seconds")
                 await asyncio.sleep(delay)
@@ -5530,7 +5530,7 @@ class GaeaDailyTask:
                     clicker_response = await self.ticket_deeptrain_clicker(cdkeys[0], emotion_detail)
                     if clicker_response is None:
                         return "ERROR"
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain {clicker_response}")
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tickettrain response: {clicker_response}")
                     
                     delay = random.randint(60, 90)
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain delay: {delay} seconds")
@@ -5576,7 +5576,7 @@ class GaeaDailyTask:
                 return "ERROR"
             is_godhood_id = "1" if clicker_response['mood'] else "0"
             
-            delay = random.randint(20, 40) * 2
+            delay = random.randint(60, 90)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
             await asyncio.sleep(delay)
             choice=os.environ.get('CHOOSE_CHOICE', '0')
@@ -5620,7 +5620,7 @@ class GaeaDailyTask:
                     clicker_response = await self.ticket_deepchoice_clicker(cdkeys[0], choice_detail)
                     if clicker_response is None:
                         return "ERROR"
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice {clicker_response}")
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketchoice response: {clicker_response}")
                     
                     delay = random.randint(60, 90)
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deepchoice delay: {delay} seconds")
