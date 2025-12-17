@@ -1512,7 +1512,7 @@ class GaeaDailyTask:
                 clicker_response = await self.godhoodemotion_clicker()
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion response: {clicker_response}")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion response: {clicker_response}")
             
             logger.success(f"The inviter transaction was send successfully! - transaction: {transaction}")
             return "SUCCESS"
@@ -4181,7 +4181,7 @@ class GaeaDailyTask:
             clicker_response = await self.emotionclaimed_clicker(eth_address)
             if clicker_response is None or str(clicker_response).find("ERROR") > -1:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionclaimed response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionclaimed response: {clicker_response}")
             
             delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # emotionclaimed
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionclaimed delay: {delay} seconds")
@@ -4427,11 +4427,14 @@ class GaeaDailyTask:
                     clicker_response = await self.snftoblate_clicker(tokenids)
                     if clicker_response is None:
                         return "ERROR"
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate response: {clicker_response}")
-                
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate response: {clicker_response}")
+
                     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # snftoblate
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate delay: {delay} seconds")
                     await asyncio.sleep(delay)
+                
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} {clicker_response}")
+                return "SUCCESS"
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_snftoblate except: {error}")
@@ -4467,7 +4470,7 @@ class GaeaDailyTask:
             clicker_response = await self.anft_generate_clicker()
             if clicker_response is None:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftgenerate response: {clicker_response}")  # {'nft_score': 19880, 'nft_ticket': 4, 'nft_role': 'Soul Genesis IV'}
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftgenerate response: {clicker_response}")  # {'nft_score': 19880, 'nft_ticket': 4, 'nft_role': 'Soul Genesis IV'}
             current_ticket = clicker_response['nft_ticket']
             if current_ticket == 0: # 无效等级
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_ticket: {current_ticket} | Insufficient ticket.")
@@ -4588,12 +4591,14 @@ class GaeaDailyTask:
                     clicker_response = await self.anftoblate_clicker(tokenids)
                     if clicker_response is None:
                         return "ERROR"
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate response: {clicker_response}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate response: {clicker_response}")
                 
                     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # anftoblate
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate delay: {delay} seconds")
                     await asyncio.sleep(delay)
-            return "SUCCESS"
+                    
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} {clicker_response}")
+                return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_anftoblate except: {error}")
             return f"ERROR: {error}"
@@ -4838,7 +4843,7 @@ class GaeaDailyTask:
                                 clicker_response = await self.visionburn_clicker(vision_id, cdkeys[i])
                                 if clicker_response is None:
                                     continue
-                                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn response: {clicker_response} - vision: {vision_id} burn: {cdkeys[i]} - {i+1}/{burn_attempts}")
+                                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn response: {clicker_response} - vision: {vision_id} burn: {cdkeys[i]} - {i+1}/{burn_attempts}")
                             except Exception as e:
                                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: {str(e)}")
                                 # 继续执行下一个任务而不是中断整个流程
@@ -4848,7 +4853,7 @@ class GaeaDailyTask:
                             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn delay: {delay} seconds")
                             await asyncio.sleep(delay)
             
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Vision burn completed")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Vision burn completed")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_visionburn except: {error}")
