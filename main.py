@@ -52,7 +52,7 @@ MODULE_MAPPING = {
     'gaea_clicker_buytickets':        gaea_clicker_buytickets,
     'gaea_clicker_earninfo':          gaea_clicker_earninfo,
     'gaea_clicker_era3info':          gaea_clicker_era3info,
-    'gaea_clicker_referralreword':    gaea_clicker_referralreword,
+    # 'gaea_clicker_referralreword':    gaea_clicker_referralreword,
     'gaea_clicker_buygodhoodid':      gaea_clicker_buygodhoodid,
     'gaea_clicker_godhoodemotion':    gaea_clicker_godhoodemotion,
     'gaea_clicker_godhoodinfo':       gaea_clicker_godhoodinfo,
@@ -346,7 +346,7 @@ def handle_basic_tasks(runname, runeq, rungt, runlt, runthread):
             Choice("🔥 Basic tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="5"),
             Choice("🔥 Basic tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="6"),
             Choice("🔥 Basic tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="7"), # 第三纪信息 - era3
-            Choice("🔥 Basic tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="8"), # 邀请奖励
+            # Choice("🔥 Basic tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="8"), # 邀请奖励
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
