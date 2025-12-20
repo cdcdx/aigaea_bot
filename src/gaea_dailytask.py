@@ -360,8 +360,10 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
-            # -------------------------------------------------------------------------- address
-            sender_address = Web3().eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- bind_address
             url = GAEA_API.rstrip('/')+'/api/bind/address'
             json_data = {
@@ -1509,7 +1511,7 @@ class GaeaDailyTask:
                 raise Exception("Failed to send_transaction.")
             else:
                 # -------------------------------------------------------------------------- godhoodemotion
-                clicker_response = await self.godhoodemotion_clicker()
+                clicker_response = await self.godhoodemotion_clicker(sender_address)
                 if clicker_response is None:
                     return "ERROR"
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion response: {clicker_response}")
@@ -1519,22 +1521,23 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_buy_clicker except: {error}")
 
-    async def godhoodemotion_clicker(self) -> None:
+    async def godhoodemotion_clicker(self, eth_address) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- godhoodid
             web3_obj = web3_obj = connect_web3_rpc()
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
-
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
 
             # 购卡合约地址
             invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
@@ -1586,15 +1589,19 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker except: {error}")
 
-    async def godhoodtransfer_clicker(self) -> None:
+    async def godhoodtransfer_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             if len(self.client.prikey) not in [64,66]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
-            # -------------------------------------------------------------------------- address
-            sender_address = Web3().eth.account.from_key(self.client.prikey).address
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- godhood_transfer
             url = GAEA_API.rstrip('/')+'/api/godhood/transfer'
             json_data = {
@@ -1638,20 +1645,17 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward_clicker eth_address: {eth_address[:10]}")
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- invite
             web3_obj = connect_web3_rpc()
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
-
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            if eth_address.lower() != sender_address.lower():
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
-                raise Exception("Does not match the binding address.")
 
             # 购卡合约地址
             invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
@@ -1677,7 +1681,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodclaimed_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodclaimed_clicker eth_address: {eth_address[:10]}")
             # -------------------------------------------------------------------------- invite
             web3_obj = connect_web3_rpc()
             
@@ -1921,7 +1924,7 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker except: {error}")
 
     ## 深度训练
-    async def is_deeptrain_clicker(self) -> None:
+    async def is_deeptrain_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -1932,16 +1935,18 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- isdeeptrain
             web3_obj = connect_web3_rpc()
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
 
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
             # 情绪合约地址
             emotion_address = Web3.to_checksum_address(CONTRACT_EMOTION)
             if ERA3_ONLINE_STAMP > current_timestamp:
@@ -1999,6 +2004,7 @@ class GaeaDailyTask:
             if eth_address.lower() != sender_address.lower():
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
                 raise Exception("Does not match the binding address.")
+
             # 情绪合约地址
             emotion_address = Web3.to_checksum_address(CONTRACT_EMOTION)
             if ERA3_ONLINE_STAMP > current_timestamp:
@@ -2232,20 +2238,17 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward_clicker eth_address: {eth_address[:10]}")
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- Reward
             web3_obj = connect_web3_rpc()
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
-
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            if eth_address.lower() != sender_address.lower():
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
-                raise Exception("Does not match the binding address.")
 
             # 情绪提现合约地址
             reward_address = Web3.to_checksum_address(CONTRACT_REWARD)
@@ -2383,7 +2386,7 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_list_clicker except: {error}")
             return remainingOptions
 
-    async def is_deepchoice_clicker(self) -> None:
+    async def is_deepchoice_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -2394,16 +2397,18 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- isdeepchoice
             web3_obj = connect_web3_rpc()
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
 
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
             # 情绪合约地址
             choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
             choice_contract = web3_obj.eth.contract(address=choice_address, abi=contract_abi_choice)
@@ -2449,6 +2454,7 @@ class GaeaDailyTask:
             if eth_address.lower() != sender_address.lower():
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
                 raise Exception("Does not match the binding address.")
+
             # 抉择合约地址
             choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
             choice_contract = web3_obj.eth.contract(address=choice_address, abi=contract_abi_choice)
@@ -2629,20 +2635,17 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward_clicker eth_address: {eth_address[:10]}")
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- Reward
             web3_obj = connect_web3_rpc()
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
-
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            if eth_address.lower() != sender_address.lower():
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
-                raise Exception("Does not match the binding address.")
 
             # 抉择提现合约地址
             award_address = Web3.to_checksum_address(CONTRACT_AWARD)
@@ -2735,7 +2738,7 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceclaimed_clicker except: {error}")
 
     ## NFT供奉 snft
-    async def snft_ismint_clicker(self) -> None:
+    async def snft_ismint_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -2746,16 +2749,18 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- is_snftmint
             web3_obj = connect_web3_rpc()
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
 
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
             # NFT合约地址
             snftmint_address = Web3.to_checksum_address(CONTRACT_SNFTMINT)
             snftmint_contract = web3_obj.eth.contract(address=snftmint_address, abi=contract_abi_mint)
@@ -2981,7 +2986,7 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate_clicker except: {error}")
 
     ## NFT供奉 anft
-    async def anft_ismint_clicker(self) -> None:
+    async def anft_ismint_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -2992,16 +2997,18 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- is_anftmint
             web3_obj = connect_web3_rpc()
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
 
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
             # NFT合约地址
             anftmint_address = Web3.to_checksum_address(CONTRACT_ANFTMINT)
             anftmint_contract = web3_obj.eth.contract(address=anftmint_address, abi=contract_abi_mint)
@@ -3227,7 +3234,7 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate_clicker except: {error}")
 
     ## 汇聚
-    async def funds_pooling_clicker(self) -> None:
+    async def funds_pooling_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -3247,8 +3254,14 @@ class GaeaDailyTask:
             # 钱包地址
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - eth: {web3_obj.from_wei(sender_balance_eth, 'ether')}")
+            if sender_balance_eth == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
+                return "ERRRO"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
+
             # USDC合约地址
             usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
             usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
@@ -3932,6 +3945,20 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker() # godhoodreward
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            
+            eth_address = clicker_response['eth_address']
+            if eth_address is None and eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
+            await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- godhoodinfo
             clicker_response = await self.godhoodinfo_clicker()
             if clicker_response is None:
@@ -3943,7 +3970,7 @@ class GaeaDailyTask:
                 return "SUCCESS"
             
             # -------------------------------------------------------------------------- godhoodemotion
-            clicker_response = await self.godhoodemotion_clicker()
+            clicker_response = await self.godhoodemotion_clicker(eth_address)
             if clicker_response is None:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion response: {clicker_response}")
@@ -4003,6 +4030,20 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker() # godhoodreward
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            
+            eth_address = clicker_response['eth_address']
+            if eth_address is None and eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
+            await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- godhoodinfo
             clicker_response = await self.godhoodinfo_clicker()
             if clicker_response is None:
@@ -4022,7 +4063,7 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- godhoodtransfer
-            clicker_response = await self.godhoodtransfer_clicker()
+            clicker_response = await self.godhoodtransfer_clicker(eth_address)
             if clicker_response is None:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer response: {clicker_response} - blindbox_usd: {blindbox_usd}")
@@ -4320,7 +4361,7 @@ class GaeaDailyTask:
             #     return "SUCCESS"
             
             # -------------------------------------------------------------------------- snftmint
-            nftlevel = await self.snft_ismint_clicker()
+            nftlevel = await self.snft_ismint_clicker(eth_address)
             if nftlevel == 4: # 已铸造,最大等级,不可升级
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftlevel: {nftlevel} | No need to upgrade to the maximum level.")
                 return "SUCCESS"
@@ -4378,7 +4419,7 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- snftmint
-            nftlevel = await self.snft_ismint_clicker()
+            nftlevel = await self.snft_ismint_clicker(eth_address)
             if nftlevel is None:
                 return "ERROR"
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftlevel: {nftlevel}")
@@ -4486,7 +4527,7 @@ class GaeaDailyTask:
                 return "ERROR"
             
             # -------------------------------------------------------------------------- anftmint
-            nftticket = await self.anft_ismint_clicker()
+            nftticket = await self.anft_ismint_clicker(eth_address)
             if nftticket == current_ticket: # 已铸造,无效升级
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftticket: {nftticket} | No need to upgrade if at the same ticket.")
                 return "SUCCESS"
@@ -4542,7 +4583,7 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- anftmint
-            nftticket = await self.anft_ismint_clicker()
+            nftticket = await self.anft_ismint_clicker(eth_address)
             if nftticket is None:
                 return "ERROR"
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftticket: {nftticket}")
@@ -4950,7 +4991,7 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- funds_pooling
-            clicker_response = await self.funds_pooling_clicker()
+            clicker_response = await self.funds_pooling_clicker(eth_address)
             if clicker_response is None:
                 return "ERROR"
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling response: {clicker_response}")
@@ -5191,7 +5232,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- isdeeptrain
-            clicker_response = await self.is_deeptrain_clicker()
+            clicker_response = await self.is_deeptrain_clicker(eth_address)
             if clicker_response is False:
                 # -------------------------------------------------------------------------- 5 deeptrain
                 await self.deeptrain_clicker(emotion, eth_address)
@@ -5259,7 +5300,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- isdeeptrain
-            clicker_response = await self.is_deeptrain_clicker()
+            clicker_response = await self.is_deeptrain_clicker(eth_address)
             if clicker_response is False:
                 # -------------------------------------------------------------------------- ticketbox_list
                 clicker_response = await self.ticketbox_list_clicker()
@@ -5315,7 +5356,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- isdeepchoice
-            clicker_response = await self.is_deepchoice_clicker()
+            clicker_response = await self.is_deepchoice_clicker(eth_address)
             if clicker_response is False:
                 # -------------------------------------------------------------------------- godhoodinfo
                 clicker_response = await self.godhoodinfo_clicker()
@@ -5366,7 +5407,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- 5 tickettrain
-            clicker_response = await self.is_deepchoice_clicker()
+            clicker_response = await self.is_deepchoice_clicker(eth_address)
             if clicker_response is False:
                 # -------------------------------------------------------------------------- ticketbox_list
                 clicker_response = await self.ticketbox_list_clicker()
@@ -5559,7 +5600,7 @@ class GaeaDailyTask:
             # --------------------------------------------------------------------------
             
             # -------------------------------------------------------------------------- deeptrain
-            clicker_response = await self.is_deeptrain_clicker()
+            clicker_response = await self.is_deeptrain_clicker(eth_address)
             if clicker_response is False:
                 task=os.environ.get('TASK_EMOTION', '0')
                 if task == '0':  # no train
@@ -5651,7 +5692,7 @@ class GaeaDailyTask:
             choice_detail=f"{choice}_{delay}_{is_godhood_id}"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
             # -------------------------------------------------------------------------- deepchoice
-            clicker_response = await self.is_deepchoice_clicker()
+            clicker_response = await self.is_deepchoice_clicker(eth_address)
             if clicker_response is False:
                 task=os.environ.get('TASK_CHOICE', '0')
                 if task == '0':  # no train
