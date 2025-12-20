@@ -1523,10 +1523,6 @@ class GaeaDailyTask:
 
     async def godhoodemotion_clicker(self, eth_address) -> None:
         try:
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
             # # 钱包地址
             # sender_address = Web3.eth.account.from_key(self.client.prikey).address
             # 钱包地址
@@ -1592,10 +1588,7 @@ class GaeaDailyTask:
     async def godhoodtransfer_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
+
             # # 钱包地址
             # sender_address = Web3.eth.account.from_key(self.client.prikey).address
             # 钱包地址
@@ -1641,10 +1634,6 @@ class GaeaDailyTask:
 
     async def godhoodreward_clicker(self, eth_address) -> None:
         try:
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
             # # 钱包地址
             # sender_address = Web3.eth.account.from_key(self.client.prikey).address
             # 钱包地址
@@ -1791,7 +1780,7 @@ class GaeaDailyTask:
     async def ticket_buy_clicker(self, tick_level, tick_rebate, final_hash) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker ERROR: Incorrect private key")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker tick_level: {tick_level}")
@@ -2234,10 +2223,6 @@ class GaeaDailyTask:
 
     async def emotionreward_clicker(self, eth_address) -> None:
         try:
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
             # # 钱包地址
             # sender_address = Web3.eth.account.from_key(self.client.prikey).address
             # 钱包地址
@@ -2631,10 +2616,6 @@ class GaeaDailyTask:
 
     async def choicereward_clicker(self, eth_address) -> None:
         try:
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
             # # 钱包地址
             # sender_address = Web3.eth.account.from_key(self.client.prikey).address
             # 钱包地址
@@ -3236,6 +3217,10 @@ class GaeaDailyTask:
     ## 汇聚
     async def funds_pooling_clicker(self, eth_address) -> None:
         try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
@@ -3848,6 +3833,10 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
     
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
             # # -------------------------------------------------------------------------- ticket_level
             tick_level=os.environ.get('TICKET_LEVEL', '0')
             if tick_level == '0':
@@ -4085,10 +4074,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # godhoodreward
             if clicker_response is None:
@@ -4166,10 +4151,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # emotionreward
             if clicker_response is None:
@@ -4245,10 +4226,6 @@ class GaeaDailyTask:
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
-                return "ERROR"
-            
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
             
             # -------------------------------------------------------------------------- session
@@ -4399,10 +4376,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # snftinfo
             if clicker_response is None:
@@ -4433,10 +4406,6 @@ class GaeaDailyTask:
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
-                return "ERROR"
-            
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
             
             # -------------------------------------------------------------------------- session
@@ -4563,10 +4532,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # anftinfo
             if clicker_response is None:
@@ -4597,10 +4562,6 @@ class GaeaDailyTask:
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
-                return "ERROR"
-            
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
             
             # -------------------------------------------------------------------------- session
@@ -4660,10 +4621,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # mission
             if clicker_response is None:
@@ -4718,10 +4675,6 @@ class GaeaDailyTask:
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
-                return "ERROR"
-            
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
             
             # -------------------------------------------------------------------------- session
@@ -4834,10 +4787,6 @@ class GaeaDailyTask:
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
-                return "ERROR"
-            
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
             
             # -------------------------------------------------------------------------- session
