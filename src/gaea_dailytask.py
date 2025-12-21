@@ -4335,9 +4335,9 @@ class GaeaDailyTask:
             if current_level == 0: # 无效等级
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_level: {current_level} | Insufficient level.")
                 return "ERROR"
-            # elif current_level == 4:
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_level: {current_level} | Maximum level.")
-            #     return "SUCCESS"
+            elif current_level == 4:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_level: {current_level} | Maximum level.")
+                return "SUCCESS"
             
             # -------------------------------------------------------------------------- snftmint
             nftlevel = await self.snft_ismint_clicker(eth_address)
