@@ -5042,7 +5042,7 @@ class GaeaDailyTask:
             if len(clicker_response['today']) > 0:
                 emotion_detail = clicker_response['today']
                 emotion = emotion_detail.split('_')[0]
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AI Training already completed")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AITrain checkin already completed")
                 # return "SUCCESS"
             else:
                 # -------------------------------------------------------------------------- godhoodinfo
@@ -5495,7 +5495,7 @@ class GaeaDailyTask:
             if len(clicker_response['today']) > 0:
                 emotion_detail = clicker_response['today']
                 emotion = emotion_detail.split('_')[0]
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AI Training already completed")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AITrain checkin already completed")
                 # return "SUCCESS"
             else:
                 # -------------------------------------------------------------------------- godhoodinfo
