@@ -5458,6 +5458,7 @@ class GaeaDailyTask:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 dailycheckin_clicker delay: {delay} seconds")
                 await asyncio.sleep(delay)
 
+
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # alltask
             if clicker_response is None:
@@ -5469,8 +5470,7 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 # return "ERROR"
 
-
-            # -------------------------------------------------------------------------- 
+            # -------------------------------------------------------------------------- medalcheckin
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medal: {clicker_response['medal']} medal_expired: {((clicker_response['medal_expired']-int(time.time()))/60/60/24 if clicker_response['medal'] else 0):.2f} days")
             delay = random.randint(10, 20)
             await asyncio.sleep(delay)
@@ -5486,7 +5486,7 @@ class GaeaDailyTask:
                 await asyncio.sleep(delay)
 
 
-            # -------------------------------------------------------------------------- ailist
+            # -------------------------------------------------------------------------- ailist aitraincheckin
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
@@ -5522,27 +5522,6 @@ class GaeaDailyTask:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 3 aitrain delay: {delay} seconds")
                 await asyncio.sleep(delay)
 
-
-            # --------------------------------------------------------------------------
-            if eth_address is None and eth_address == "":
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
-                return "ERROR"
-
-            # -------------------------------------------------------------------------- ailist
-            clicker_response = await self.ailist_clicker()
-            if clicker_response is None:
-                return "ERROR"
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist response: {clicker_response}")
-            
-            if len(clicker_response['today']) > 0:
-                emotion_detail = clicker_response['today']
-                emotion = emotion_detail.split('_')[0]
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AI Training already completed")
-                # return "SUCCESS"
-            else:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
-                return "ERROR"
-            
             delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
             await asyncio.sleep(delay)
@@ -5588,7 +5567,7 @@ class GaeaDailyTask:
                     await asyncio.sleep(delay)
             
             today = time.strftime("%d/%m/%Y", time.localtime())
-            # -------------------------------------------------------------------------- ailist
+            # -------------------------------------------------------------------------- ailist traincheckin
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
@@ -5621,7 +5600,7 @@ class GaeaDailyTask:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin response: {clicker_response}")
 
-            # -------------------------------------------------------------------------- godhoodinfo
+            # -------------------------------------------------------------------------- godhoodinfo is_godhood_id
             clicker_response = await self.godhoodinfo_clicker()
             if clicker_response is None:
                 return "ERROR"
