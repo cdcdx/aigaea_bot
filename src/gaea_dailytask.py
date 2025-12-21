@@ -4733,10 +4733,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # milestoneclaim
             if clicker_response is None:
@@ -4863,10 +4859,6 @@ class GaeaDailyTask:
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
-                return "ERROR"
-            
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
             
             # -------------------------------------------------------------------------- session
