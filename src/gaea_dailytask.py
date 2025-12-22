@@ -5058,7 +5058,9 @@ class GaeaDailyTask:
                 clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
+
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AITrain successfully! - emotion: {emotion_detail}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain except: {error}")
@@ -5167,9 +5169,9 @@ class GaeaDailyTask:
                 clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
-                # logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
                 # return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain emotion: {emotion_detail}")
             
             delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
@@ -5235,9 +5237,9 @@ class GaeaDailyTask:
                 clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
-                # logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
                 # return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain emotion: {emotion_detail}")
             
             delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
