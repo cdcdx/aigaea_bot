@@ -227,75 +227,7 @@ def run_module(module, runname, runeq, rungt, runlt, runthread):
     
     asyncio.run(gaea_run_modules(module=module, runname=runname, runeq=runeq, rungt=rungt, runlt=runlt, runthread=runthread))
 
-# ---------------------------------------------------------------------------------------------------------- main one
-
-def main1(runname, runeq, rungt, runlt, runthread):
-    try:
-        while True:
-            if platform.system().lower() == 'windows':
-                os.system("title main")
-            answer = select(
-                'Choose',
-                choices=[
-                    Choice("🚀 Gaea tasks - register",                     'gaea_clicker_register',           shortcut_key="a"),
-                    Choice("🚀 Gaea tasks - login",                        'gaea_clicker_login',              shortcut_key="b"),
-                    Choice("🚀 Gaea tasks - session",                      'gaea_clicker_session',            shortcut_key="c"),
-                    Choice("🔥 Gaea tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="d"),
-                    Choice("🔥 Gaea tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="e"),
-                    Choice("🐌 Gaea tasks - buytickets",                   'gaea_clicker_buytickets',         shortcut_key="f"),
-                    Choice("🔥 Gaea tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="g"),
-                    # Choice("🔥 Gaea tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="g"), # 第三纪信息 - era3
-                    # Choice("🔥 Gaea tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="m"), # 邀请奖励
-                    # Choice("🐌 Gaea tasks - buygodhoodid",                 'gaea_clicker_buygodhoodid',       shortcut_key="g"), # 购买神格卡 - inviter
-                    # Choice("🔥 Gaea tasks - godhoodemotion",               'gaea_clicker_godhoodemotion',     shortcut_key="g"), # 上传神格情绪
-                    # Choice("🔥 Gaea tasks - godhoodinfo",                  'gaea_clicker_godhoodinfo',        shortcut_key="g"), # 神格卡信息
-                    # Choice("🔥 Gaea tasks - godhoodgrowthinfo",            'gaea_clicker_godhoodgrowthinfo',  shortcut_key="g"), # ID卡等级信息 - exp
-                    Choice("🐌 Gaea tasks - godhoodtransfer",              'gaea_clicker_godhoodtransfer',    shortcut_key="h"), # USD划转
-                    Choice("🔥 Gaea tasks - godhoodreward",                'gaea_clicker_godhoodreward',      shortcut_key="i"),
-                    Choice("🐌 Gaea tasks - godhoodclaimed",               'gaea_clicker_godhoodclaimed',     shortcut_key="m"),
-                    Choice("🔥 Gaea tasks - emotionreward",                'gaea_clicker_emotionreward',      shortcut_key="n"),
-                    Choice("🐌 Gaea tasks - emotionclaimed",               'gaea_clicker_emotionclaimed',     shortcut_key="o"),
-                    Choice("🔥 Gaea tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="p"),
-                    Choice("🐌 Gaea tasks - choiceclaimed",                'gaea_clicker_choiceclaimed',      shortcut_key="q"),
-                    Choice("🐌 Gaea tasks - snftmint",                     'gaea_clicker_snftmint',           shortcut_key="r"),
-                    Choice("🔥 Gaea tasks - snftinfo",                     'gaea_clicker_snftinfo',           shortcut_key="s"),
-                    Choice("🐌 Gaea tasks - snftoblate   (🈷️)",            'gaea_clicker_snftoblate',         shortcut_key="t"),
-                    Choice("🐌 Gaea tasks - anftmint",                     'gaea_clicker_anftmint',           shortcut_key="u"),
-                    Choice("🔥 Gaea tasks - anftinfo",                     'gaea_clicker_anftinfo',           shortcut_key="v"),
-                    Choice("🐌 Gaea tasks - anftoblate   (🈷️)",            'gaea_clicker_anftoblate',         shortcut_key="w"),
-                    # Choice("🔥 Gaea tasks - missionconnect",               'gaea_clicker_missionconnect',     shortcut_key="w"),
-                    # Choice("🔥 Gaea tasks - missioncomplete",              'gaea_clicker_missioncomplete',    shortcut_key="w"),
-                    Choice("🔥 Gaea tasks - milestoneburn",                'gaea_clicker_milestoneburn',      shortcut_key="x"),
-                    Choice("🐌 Gaea tasks - milestoneclaim",               'gaea_clicker_milestoneclaim',     shortcut_key="y"),
-                    # Choice("🔥 Gaea tasks - visionburn",                   'gaea_clicker_visionburn',         shortcut_key="x"),
-                    # Choice("🐌 Gaea tasks - visionclaim",                  'gaea_clicker_visionclaim',        shortcut_key="y"),
-                    Choice("🐌 Fund tasks - fundspooling",                 'gaea_clicker_fundspooling',       shortcut_key="z"),
-                    # Choice("🔥 Gaea daily tasks - checkin        (☀️)",    'gaea_clicker_checkin',            shortcut_key="1"),
-                    # Choice("🔥 Gaea daily tasks - signin         (☀️)",    'gaea_clicker_signin',             shortcut_key="2"),
-                    Choice("🔥 Gaea daily tasks - dailycheckin   (☀️)",    'gaea_clicker_dailycheckin',       shortcut_key="1"),
-                    Choice("🔥 Gaea daily tasks - medalcheckin   (☀️)",    'gaea_clicker_medalcheckin',       shortcut_key="2"),
-                    Choice("🔥 Gaea daily tasks - aitrain        (☀️)",    'gaea_clicker_aitrain',            shortcut_key="3"),
-                    Choice("🔥 Gaea daily tasks - traincheckin   (☀️)",    'gaea_clicker_traincheckin',       shortcut_key="4"),
-                    Choice("🔥 Gaea daily tasks - deeptrain      (☀️)",    'gaea_clicker_deeptrain',          shortcut_key="5"),
-                    Choice("🔥 Gaea daily tasks - tickettrain    (☀️)",    'gaea_clicker_tickettrain',        shortcut_key="6"),
-                    Choice("🔥 Gaea daily tasks - deepchoice     (☀️)",    'gaea_clicker_deepchoice',         shortcut_key="7"),
-                    Choice("🔥 Gaea daily tasks - ticketchoice   (☀️)",    'gaea_clicker_ticketchoice',       shortcut_key="8"),
-                    Choice("🔥 Gaea daily tasks - alltask        (☀️)",    'gaea_clicker_alltask',            shortcut_key="9"),
-                    Choice('❌ Exit', "exit", shortcut_key="0")
-                ],
-                use_shortcuts=True,
-                use_arrow_keys=True,
-            ).ask()
-
-            if answer in MODULE_MAPPING:
-                run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
-            elif answer == 'exit':
-                sys.exit()
-    except (KeyboardInterrupt, asyncio.CancelledError, SystemExit) as e:
-        cprint(f"\nShutting down due to: {type(e).__name__}", color='light_yellow')
-        sys.exit()
-
-# ---------------------------------------------------------------------------------------------------------- main two
+# ---------------------------------------------------------------------------------------------------------- main
 
 def main(runname, runeq, rungt, runlt, runthread):
     try:
@@ -473,16 +405,14 @@ def handle_funds_tasks(runname, runeq, rungt, runlt, runthread):
 
 async def gaea_daily_task_modules(module, runname, runeq, runthread):
     module_mapping = {
-        gaea_clicker_register:      "launch_clicker_register",
-        gaea_clicker_login:         "launch_clicker_login",
         gaea_clicker_dailycheckin:  "launch_clicker_dailycheckin",
         gaea_clicker_medalcheckin:  "launch_clicker_medalcheckin",
         gaea_clicker_aitrain:       "launch_clicker_aitrain",
         gaea_clicker_deeptrain:     "launch_clicker_deeptrain",
         gaea_clicker_tickettrain:   "launch_clicker_tickettrain",
+        gaea_clicker_traincheckin:  "launch_clicker_traincheckin",
         gaea_clicker_deepchoice:    "launch_clicker_deepchoice",
         gaea_clicker_ticketchoice:  "launch_clicker_ticketchoice",
-        gaea_clicker_traincheckin:  "launch_clicker_traincheckin",
         gaea_clicker_alltask:       "launch_clicker_alltask",
     }
     module_name = module_mapping.get(module, "none")
@@ -490,8 +420,9 @@ async def gaea_daily_task_modules(module, runname, runeq, runthread):
     if runthread==0:
         datas = get_data_for_token(runname)
         runthread=len(datas)
-    if int(runeq)>0:
+    if len(runeq)>0:
         runthread=1
+    logger.debug(f"runname: {runname} runeq: {runeq} runthread: {runthread}")
 
     tasks = []
     task_manager = TaskManager(runname)
@@ -500,7 +431,6 @@ async def gaea_daily_task_modules(module, runname, runeq, runthread):
         logger.debug(f"func: {module_name} thread: {thread} delay: {delay} seconds")
         await asyncio.sleep(delay)
 
-        # logger.info(f"func: {module_name} thread: {thread} runeq: {runeq} module: {module_name}")
         task_func = getattr(task_manager, module_name, None)
         tasks.append(asyncio.create_task(
             task_func(thread, runeq, module_name)

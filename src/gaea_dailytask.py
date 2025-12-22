@@ -184,7 +184,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
 
             code = response.get('code', None)
             if code not in [200, 201]:
@@ -214,7 +214,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -289,7 +289,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -330,7 +330,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -381,7 +381,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bind_address_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bind_address_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bind_address_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -422,7 +422,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -463,7 +463,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -504,7 +504,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -545,7 +545,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -586,7 +586,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -640,7 +640,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -681,7 +681,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -736,7 +736,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -786,7 +786,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -831,7 +831,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -873,7 +873,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -892,9 +892,9 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker except: {error}")
 
-    async def aitraincheckin_clicker(self, emotion_detail) -> None:
+    async def aitrain_clicker(self, emotion_detail) -> None:
         try:
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker emotion_detail: {emotion_detail}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker emotion_detail: {emotion_detail}")
 
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -910,8 +910,8 @@ class GaeaDailyTask:
                 "detail": emotion_detail
             }
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker url: {url}")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker json_data: {json_data}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker json_data: {json_data}")
             response = await self.client.make_request(
                 method='POST', 
                 url=url, 
@@ -919,26 +919,26 @@ class GaeaDailyTask:
                 json=json_data
             )
             if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker {response}")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
                 if message is None:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker => {message}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker => {message}")
                     return message
                 else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker ERROR: {message}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker except: {error}")
 
     async def traincheckin_clicker(self) -> None:
         try:
@@ -965,7 +965,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1009,7 +1009,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1054,7 +1054,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1100,7 +1100,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1142,7 +1142,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1188,7 +1188,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1229,7 +1229,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneclaim_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneclaim_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneclaim_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1271,7 +1271,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionlist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionlist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionlist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1321,7 +1321,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201, 206]:
@@ -1362,7 +1362,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1566,7 +1566,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1613,7 +1613,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1758,7 +1758,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -2202,7 +2202,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -2595,7 +2595,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -2779,7 +2779,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft_generate_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft_generate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft_generate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -2901,7 +2901,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftlist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftlist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftlist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -2947,7 +2947,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3027,7 +3027,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft_generate_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft_generate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft_generate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3149,7 +3149,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftlist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftlist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftlist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3195,7 +3195,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3380,7 +3380,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3426,7 +3426,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3467,7 +3467,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3508,7 +3508,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -5036,7 +5036,7 @@ class GaeaDailyTask:
             if len(clicker_response['today']) > 0:
                 emotion_detail = clicker_response['today']
                 emotion = emotion_detail.split('_')[0]
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AITrain checkin already completed")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AITrain already completed")
                 # return "SUCCESS"
             else:
                 # -------------------------------------------------------------------------- godhoodinfo
@@ -5050,12 +5050,12 @@ class GaeaDailyTask:
                 delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
-                # -------------------------------------------------------------------------- 3 aitraincheckin
+                # -------------------------------------------------------------------------- 3 aitrain
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
                 emotion_detail=emotion+'_1_'+is_godhood_id
-                clicker_response = await self.aitraincheckin_clicker(emotion_detail)
+                clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
@@ -5159,12 +5159,12 @@ class GaeaDailyTask:
                 delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
-                # -------------------------------------------------------------------------- 3 aitraincheckin
+                # -------------------------------------------------------------------------- 3 aitrain
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
                 emotion_detail=emotion+'_1_'+is_godhood_id
-                clicker_response = await self.aitraincheckin_clicker(emotion_detail)
+                clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
@@ -5227,12 +5227,12 @@ class GaeaDailyTask:
                 delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
-                # -------------------------------------------------------------------------- 3 aitraincheckin
+                # -------------------------------------------------------------------------- 3 aitrain
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
                 emotion_detail=emotion+'_1_'+is_godhood_id
-                clicker_response = await self.aitraincheckin_clicker(emotion_detail)
+                clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
@@ -5480,7 +5480,7 @@ class GaeaDailyTask:
                 await asyncio.sleep(delay)
 
 
-            # -------------------------------------------------------------------------- ailist aitraincheckin
+            # -------------------------------------------------------------------------- ailist aitrain
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
@@ -5489,7 +5489,7 @@ class GaeaDailyTask:
             if len(clicker_response['today']) > 0:
                 emotion_detail = clicker_response['today']
                 emotion = emotion_detail.split('_')[0]
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AITrain checkin already completed")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AITrain already completed")
                 # return "SUCCESS"
             else:
                 # -------------------------------------------------------------------------- godhoodinfo
@@ -5503,12 +5503,12 @@ class GaeaDailyTask:
                 delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
-                # -------------------------------------------------------------------------- 3 aitraincheckin
+                # -------------------------------------------------------------------------- 3 aitrain
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
                 emotion_detail=emotion+'_1_'+is_godhood_id
-                clicker_response = await self.aitraincheckin_clicker(emotion_detail)
+                clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
 
