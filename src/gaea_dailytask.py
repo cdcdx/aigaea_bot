@@ -63,70 +63,265 @@ class GaeaDailyTask:
             "X-Requested-With": "org.telegram.messenger.web",
         }
 
-    # Send transaction (retry 5 times, 2 seconds each)
-    def send_transaction_with_retry(self, web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas, max_retries=1, retry_interval=2):
+    # -------------------------------------------------------------------------- web3
+
+    # build base transaction
+    def build_base_transaction(self, web3_obj, sender_address, config_chainid):
         """
-        发送交易
-        :param web3_connection: Web3 连接对象
-        :param transaction: 交易对象
-        :param max_fee_per_gas: 最大每 gas 费用
-        :param priority_fee_per_gas: 优先每 gas 费用
-        :param max_retries: 最大重试次数
-        :param retry_interval: 重试间隔时间
-        :return: 交易结果和交易哈希
+        构建基础交易参数
         """
+        # 获取上个区块Gas
+        latest_block = web3_obj.eth.get_block('latest')
+        base_fee = latest_block['baseFeePerGas']
+        priority_fee = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+        priority_fee = int(priority_fee * 1.5)  # 增加50%的缓冲
+        max_fee = int(base_fee * 1.5) + priority_fee   # 增加50%的缓冲
+        
+        # 确保 max_fee >= priority_fee
+        max_fee = max(max_fee, priority_fee)
+        
+        logger.debug(f"baseFeePerGas: {base_fee} wei")
+        logger.debug(f"maxPriorityFeePerGas: {priority_fee} wei")
+        logger.debug(f"maxFeePerGas: {max_fee} wei")
+        
+        return {
+            "chainId": config_chainid,
+            "from": sender_address,
+            # "nonce": web3_obj.eth.get_transaction_count(sender_address),
+            "nonce": web3_obj.eth.get_transaction_count(sender_address, 'pending'),
+            "maxFeePerGas": max_fee,
+            "maxPriorityFeePerGas": priority_fee,
+            # "gas": base_fee * priority_fee_per_gas,
+            # "gas": 20000000,  # 最大 Gas 用量
+        }
+
+    # 发送交易（重试3次，每次2秒）
+    def send_transaction_with_retry(self, web3_obj, transaction, web3_prikey, max_retries=3, retry_interval=3):
         attempt = 0
+        initial_base_fee = None
+        initial_priority_fee = None
+        
+        # 设置合理的费用上限，避免过高费用
+        MAX_BASE_FEE = web3_obj.to_wei(20, 'gwei')  # 最高基础费用
+        MAX_PRIORITY_FEE = web3_obj.to_wei(2, 'gwei')  # 最高优先费用
+        
+        # 初始gas限制和增长策略
+        default_gas_limit = 200000
+        gas_limit = default_gas_limit
+        gas_increase_factor = 1.3  # gas限制增长因子
+        
         while attempt < max_retries:
             try:
-                gas_limit = web3_obj.eth.estimate_gas(transaction)
-                logger.debug(f"Estimated GasLimit: {gas_limit} units")
-                total_gas_cost = max_fee_per_gas * gas_limit
-                logger.debug(f"Total Gas Cost: {total_gas_cost} wei / {total_gas_cost / 10 ** 18} ETH")
+                logger.debug(f"transaction: {transaction}")
+                
+                # 动态更新 Gas 参数
+                latest_block = web3_obj.eth.get_block('latest')
+                base_fee = latest_block['baseFeePerGas']
+                current_priority_fee = web3_obj.eth.max_priority_fee
+                
+                # 记录初始费用用于比较
+                if attempt == 0:
+                    initial_base_fee = base_fee
+                    initial_priority_fee = current_priority_fee
+                
+                # 根据尝试次数调整费用
+                if attempt > 0:
+                    # 费用增长策略: 每次尝试增加15%费用，但不超过上限
+                    fee_multiplier = 1.15 ** attempt
+                    priority_fee = min(
+                        int(initial_priority_fee * fee_multiplier), 
+                        MAX_PRIORITY_FEE
+                    )
+                    # 更新nonce
+                    transaction['nonce'] = web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
+                else:
+                    # 初始交易使用保守的费用
+                    priority_fee = min(int(current_priority_fee * 1.1), MAX_PRIORITY_FEE)
+                    
+                # 计算最大费用
+                max_fee = min(
+                    int(base_fee * 1.1) + priority_fee,
+                    MAX_BASE_FEE
+                )
+                
+                # 确保 max_fee >= priority_fee
+                max_fee = max(max_fee, priority_fee)
+                
+                # 更新交易参数
                 transaction.update({
-                    "gas": gas_limit,
-                    "maxFeePerGas": max_fee_per_gas,
-                    "maxPriorityFeePerGas": priority_fee_per_gas,
+                    "maxFeePerGas": max_fee,
+                    "maxPriorityFeePerGas": priority_fee,
                 })
-                logger.debug(f"update transaction: {transaction}")
-                signed_transaction = web3_obj.eth.account.sign_transaction(transaction, self.client.prikey)
-                logger.debug(f"signed_transaction: {signed_transaction}")
+                logger.debug(f"update transaction fees: maxFee={max_fee}, priorityFee={priority_fee}")
+                
+                # 估算 Gas
                 try:
-                    # Sending transactions
+                    estimated_gas = web3_obj.eth.estimate_gas(transaction)
+                    # 增加合理的gas限制缓冲，随着重试次数增加而增加
+                    buffer_multiplier = min(1.0 + (0.1 * attempt), gas_increase_factor)  # 最多1.3倍缓冲
+                    gas_limit = int(estimated_gas * buffer_multiplier)
+                    if gas_limit < 100000:
+                        gas_limit = 100000
+                except Exception as e:
+                    logger.error(f"Failed to eth.estimate_gas: {str(e)}")
+                    decoded_error = self.decode_revert_reason(str(e)) if '0x' in str(e) else str(e)
+                    
+                    # 根据错误类型调整gas策略
+                    error_str = str(e).lower()
+                    if attempt == 0:
+                        # 第一次尝试失败时使用默认gas值
+                        gas_limit = default_gas_limit
+                        logger.warning(f"Using default gas limit: {gas_limit}")
+                    elif "intrinsic gas too low" in error_str or "out of gas" in error_str:
+                        # 如果是gas不足相关错误，增加gas限制
+                        gas_limit = int(gas_limit * gas_increase_factor)
+                        logger.warning(f"Increasing gas limit to: {gas_limit} due to gas related error")
+                    elif "replacement transaction underpriced" in error_str:
+                        # 如果是费用不足，增加费用但保持gas不变
+                        gas_limit = min(int(gas_limit * 1.15), default_gas_limit*2)  # 轻微增加gas作为备选方案
+                        logger.warning(f"Adjusting gas limit for fee related error: {gas_limit}")
+                    elif "nonce too low" in error_str:
+                        # nonce错误时保持gas不变
+                        logger.warning("Nonce error, keeping gas limit unchanged")
+                    elif attempt < max_retries - 1:
+                        # 其他错误情况下适度增加gas并继续尝试
+                        gas_limit = int(gas_limit * 1.25)
+                        logger.warning(f"Moderately increasing gas limit to: {gas_limit}")
+                    else:
+                        # 最后一次尝试仍然失败则返回错误
+                        return False, {"tx_hash": "eth.estimate_gas", "msg": decoded_error}
+                
+                logger.debug(f"gas_limit: {gas_limit}")
+                transaction["gas"] = gas_limit
+                logger.debug(f"update transaction with gas: {transaction}")
+                
+                # 使用私钥签名交易
+                signed_transaction = web3_obj.eth.account.sign_transaction(transaction, web3_prikey)
+                logger.debug(f"signed_transaction: {signed_transaction}")
+                # 发送交易
+                try:
+                    # 发送交易
                     if str(signed_transaction).find("raw_transaction") > 0:
                         tx_hash = web3_obj.eth.send_raw_transaction(signed_transaction.raw_transaction)
                     elif str(signed_transaction).find("signed_transaction") > 0:
                         tx_hash = web3_obj.eth.send_raw_transaction(signed_transaction.raw_transaction)
-                    logger.debug(f"Send transaction, hash: {tx_hash.hex()}")
-                    # Waiting for the transaction to complete
-                    receipt = web3_obj.eth.wait_for_transaction_receipt(tx_hash)
-                    logger.debug(f"Waiting for completion, receipt: {receipt}")
+                    logger.debug(f"Transaction sent - tx_hash: {tx_hash.hex()}")
+                    # 等待交易完成
+                    # receipt = web3_obj.eth.wait_for_transaction_receipt(tx_hash)
+                    try:
+                        receipt_timeout = 30 if attempt == 0 else 15
+                        receipt = web3_obj.eth.wait_for_transaction_receipt(tx_hash, timeout=receipt_timeout)
+                    except Exception as e:
+                        logger.error(f"Transaction not included in chain after {receipt_timeout} seconds: {str(e)}")
+                        return False, {"tx_hash": f"0x{tx_hash.hex()}", "msg": f"Transaction not included in chain after {receipt_timeout} seconds"}
+                    logger.debug(f"Waiting to complete - receipt: {receipt}")
                     tx_bytes = f"0x{tx_hash.hex()}"
                     
-                    if receipt["status"] == 1:
-                        logger.info(f"Transaction successful, hash: {tx_bytes}")
+                    if receipt['status'] == 1:
+                        logger.success(f"Transaction successful - tx_hash: {tx_bytes}")
                         return True, {"tx_hash": tx_bytes}
                     else:
-                        logger.error(f"Transaction failed, hash: {tx_bytes}")
+                        logger.error(f"Transaction failed - tx_hash: {tx_bytes}")
                         return False, {"tx_hash": tx_bytes}
                 except ValueError as e:
-                    logger.info(f"Failed to transfer ValueError ETH : {str(e)}")
+                    logger.warning(f"Failed to transaction ValueError ETH : {str(e)}")
                     try:
-                        if e.args[0].get('message') in 'intrinsic gas too low':
-                            result = False, {"tx_hash": tx_bytes, "msg": e.args[0].get('message')}
+                        error_message = e.args[0].get('message', '') if isinstance(e.args[0], dict) else str(e)
+                        error_code = e.args[0].get('code', None) if isinstance(e.args[0], dict) else None
+                        
+                        if 'rpc error' in error_message.lower() or 'node error' in error_message.lower():
+                            logger.error(f"RPC node error encountered: {error_message}")
+                            # 返回更明确的错误信息，指示这是RPC节点错误
+                            result = False, {"tx_hash": tx_bytes, "msg": f"RPC node error: {error_message}. Please check node connectivity and logs for more information."}
+                        elif 'intrinsic gas too low' in error_message.lower():
+                            # 如果是gas过低错误，在下次尝试时增加gas
+                            gas_limit = int(gas_limit * gas_increase_factor)
+                            result = False, {"tx_hash": tx_bytes, "msg": error_message}
+                        elif 'replacement transaction underpriced' in error_message.lower():
+                            # 费用不足错误，下次尝试时增加费用
+                            result = False, {"tx_hash": tx_bytes, "msg": error_message}
+                        elif 'nonce too low' in error_message.lower():
+                            # nonce错误，更新nonce
+                            transaction['nonce'] = web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
+                            result = False, {"tx_hash": tx_bytes, "msg": error_message}
                         else:
-                            result = False, {"tx_hash": tx_bytes, "msg": e.args[0].get('message'), "code": e.args[0].get('code')}
+                            result = False, {"tx_hash": tx_bytes, "msg": error_message, "code": error_code}
                     except Exception as e:
                         result = False, {"tx_hash": tx_bytes, "msg": str(e)}
                     return result
             except Exception as e:
-                logger.error(f"Attempt {attempt + 1} failed: {e}")
+                error_msg = str(e).lower()
+                if "replacement transaction underpriced" in error_msg:
+                    logger.warning(f"Priority fee insufficient, will increase... (Try {attempt+1}/{max_retries})")
+                    if attempt + 1 >= max_retries:
+                        logger.error(f"Maximum number of retries: {error_msg}")
+                        return False, {"tx_hash": "", "msg": f"Maximum number of retries: {error_msg}"}
+                elif "max fee per gas" in error_msg:
+                    logger.warning(f"Basic fee insufficient, will increase... (Try {attempt+1}/{max_retries})")
+                elif "nonce too low" in error_msg:
+                    logger.warning(f"Nonce is too low, get the latest nonce... (Try {attempt+1}/{max_retries})")
+                    transaction['nonce'] = web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
+                elif "already known" in error_msg:
+                    logger.warning(f"Awaiting confirmation... (Try {attempt+1}/{max_retries})")
+                    # 交易已经在内存池中，我们应该查询它的状态而不是简单等待
+                    try:
+                        # 尝试通过交易哈希获取交易详情
+                        pending_tx = web3_obj.eth.get_transaction(signed_transaction.hash)
+                        if pending_tx:
+                            logger.info(f"Found pending transaction: {signed_transaction.hash.hex()}")
+                            # 等待交易确认
+                            try:
+                                receipt = web3_obj.eth.wait_for_transaction_receipt(signed_transaction.hash, timeout=30)
+                                if receipt['status'] == 1:
+                                    logger.success(f"Transaction successful - tx_hash: {signed_transaction.hash.hex()}")
+                                    return True, {"tx_hash": signed_transaction.hash.hex()}
+                                else:
+                                    logger.error(f"Transaction failed - tx_hash: {signed_transaction.hash.hex()}")
+                                    return False, {"tx_hash": signed_transaction.hash.hex()}
+                            except Exception as wait_e:
+                                logger.error(f"Pending transaction timeout: {str(wait_e)}")
+                    except Exception as fetch_e:
+                        logger.warning(f"Unable to retrieve pending transactions: {str(fetch_e)}")
+                    
+                    # 交易已经在内存池中，等待确认
+                    time.sleep(retry_interval)
+                    attempt += 1
+                    continue
+                else:
+                    logger.error(f"Failed to send transaction: {e} (Try {attempt+1}/{max_retries})")
+                
                 attempt += 1
                 if attempt < max_retries:
                     logger.debug(f"Retrying in {retry_interval} seconds...")
                     time.sleep(retry_interval)
                 else:
-                    logger.error(f"Max retries reached. Failed to eth.estimate_gas: {str(e)}")
-                    return False, {"tx_hash": "estimate_gas", "msg": str(e)}
+                    logger.error(f"Max retries reached. Failed to eth.send_raw_transaction: {str(e)}")
+                    return False, {"tx_hash": "send_raw_transaction", "msg": str(e)}
+
+    # 解析 Solidity 合约的 revert 错误信息
+    def decode_revert_reason(self, hex_error):
+        try:
+            # 移除 '0x' 前缀
+            if hex_error.startswith('0x'):
+                hex_error = hex_error[2:]
+            # 检查是否是标准的 Error(string) 选择器
+            if hex_error.startswith('08c379a0'):
+                # 跳过选择器 (4 bytes = 8 hex chars)
+                data = hex_error[8:]
+                
+                # 获取字符串长度 (offset 32 bytes = 64 hex chars)
+                length_hex = data[64:128]
+                length = int(length_hex, 16)
+                
+                # 获取实际的错误消息 (从 128 hex chars 开始)
+                message_hex = data[128:128 + length*2]
+                message = bytes.fromhex(message_hex).decode('utf-8')
+                
+                return message
+            else:
+                return hex_error
+        except Exception as e:
+            return f"Unable to resolve: {str(e)}"
 
     # -------------------------------------------------------------------------- 接口
 
@@ -1440,74 +1635,36 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Insufficient USDC authorization amount for invite_contract.")
                 # raise Exception("Insufficient USDC authorization amount for invite_contract.")
 
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 购卡合约金额授权
-                transaction = usdc_contract.functions.approve(invite_address, inviter_price).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = usdc_contract.functions.approve(invite_address, inviter_price).build_transaction(base_transaction)
                 logger.debug(f"approve transaction: {transaction}")
 
                 # 发送交易
-                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
                 if tx_success == False:
-                    logger.error(f"Ooops! Failed to send_transaction.")
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
                 
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction was send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
-            # 构建交易 - 购卡
             referral_addr = random.choice(REFERRAL_ADDRESS)
             referral_address = Web3.to_checksum_address(referral_addr)
             logger.debug(f"referral_address: {referral_address}")
             
-            transaction = invite_contract.functions.inviter( referral_address ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
+            # 构建交易 - 购卡
+            transaction = invite_contract.functions.inviter( referral_address ).build_transaction(base_transaction)
             logger.debug(f"inviter transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # invite.inviter
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             else:
                 # -------------------------------------------------------------------------- godhoodemotion
@@ -1699,35 +1856,16 @@ class GaeaDailyTask:
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
             
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 提现
-            transaction = invite_contract.functions.claimrewards( ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            transaction = invite_contract.functions.claimrewards( ).build_transaction(base_transaction)
             logger.debug(f"claimrewards transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # invite.claimrewards
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
 
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claimrewards transaction was send successfully! - reward_usdc: {reward_usdc}")
@@ -1841,70 +1979,32 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Insufficient USDC authorization amount for ticket_contract.")
                 # raise Exception("Insufficient USDC authorization amount for ticket_contract.")
 
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 购卡合约金额授权
-                transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(base_transaction)
                 logger.debug(f"approve transaction: {transaction}")
 
                 # 发送交易
-                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
                 if tx_success == False:
-                    logger.error(f"Ooops! Failed to send_transaction.")
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
                 
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction was send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 购买
-            transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(base_transaction)
             logger.debug(f"buyTickets transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # ticket.buyTickets
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The buyTickets transaction was send successfully! - tick_level: {tick_level} tick_rebate: {tick_rebate}")
@@ -2078,94 +2178,38 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Insufficient USDC authorization amount for emotion_contract.")
                 # raise Exception("Insufficient USDC authorization amount for emotion_contract.")
 
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 情绪合约金额授权
                 MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
-                transaction = usdc_contract.functions.approve(emotion_address, MAX_UINT256).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = usdc_contract.functions.approve(emotion_address, MAX_UINT256).build_transaction(base_transaction)
                 logger.debug(f"approve transaction: {transaction}")
 
                 # 发送交易
-                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
                 if tx_success == False:
-                    logger.error(f"Ooops! Failed to send_transaction.")
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
                 
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction was send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 情绪打卡
             if ERA3_ONLINE_STAMP > current_timestamp:
-                transaction = emotion_contract.functions.emotions( emotion_int ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = emotion_contract.functions.emotions( emotion_int ).build_transaction(base_transaction)
             elif EMOTION3_ONLINE_STAMP > current_timestamp:
-                transaction = emotion_contract.functions.emotions( sender_address, emotion_int ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = emotion_contract.functions.emotions( sender_address, emotion_int ).build_transaction(base_transaction)
             else:
-                transaction = emotion_contract.functions.bet( sender_address, emotion_int ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = emotion_contract.functions.bet( sender_address, emotion_int ).build_transaction(base_transaction)
             logger.debug(f"emotions transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # emotion.bet
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             
             logger.info(f"The emotions transaction was send successfully! - transaction: {transaction}")
@@ -2297,35 +2341,16 @@ class GaeaDailyTask:
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
             
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 提现
-            transaction = reward_contract.functions.claim().build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            transaction = reward_contract.functions.claim().build_transaction(base_transaction)
             logger.debug(f"claim transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # reward.claim
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claim transaction was send successfully! - reward_usdc: {reward_usdc}")
@@ -2494,71 +2519,33 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Insufficient USDC authorization amount for choice_contract.")
                 # raise Exception("Insufficient USDC authorization amount for choice_contract.")
 
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 情绪合约金额授权
                 MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
-                transaction = usdc_contract.functions.approve(choice_address, MAX_UINT256).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = usdc_contract.functions.approve(choice_address, MAX_UINT256).build_transaction(base_transaction)
                 logger.debug(f"approve transaction: {transaction}")
 
                 # 发送交易
-                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
                 if tx_success == False:
-                    logger.error(f"Ooops! Failed to send_transaction.")
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
 
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction was send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 情绪打卡
-            transaction = choice_contract.functions.bet( sender_address, choice_int, soul_int ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            transaction = choice_contract.functions.bet( sender_address, choice_int, soul_int ).build_transaction(base_transaction)
             logger.debug(f"choices transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # choice.bet
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
 
             logger.info(f"The choices transaction was send successfully! - transaction: {transaction}")
@@ -2682,35 +2669,16 @@ class GaeaDailyTask:
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
             
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 提现
-            transaction = award_contract.functions.claim().build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            transaction = award_contract.functions.claim().build_transaction(base_transaction)
             logger.debug(f"claim transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # award.claim
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
 
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claim transaction was send successfully! - award_usdc: {award_usdc}")
@@ -2830,48 +2798,20 @@ class GaeaDailyTask:
             snftmint_id = snftmint_contract.functions.getTokenID( sender_address ).call()
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} snftmint_id: {snftmint_id}")
             
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 铸造
             if snftmint_id==0:
-                transaction = snftmint_contract.functions.mintNFT(nft_level,block_number,final_hash).build_transaction(
-                        {
-                            "chainId": WEB3_CHAINID,
-                            "from": sender_address,
-                            "gas": 20000000,  # 最大 Gas 用量
-                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                        }
-                    )
+                transaction = snftmint_contract.functions.mintNFT(nft_level,block_number,final_hash).build_transaction(base_transaction)
                 logger.debug(f"mintNFT transaction: {transaction}")
             else:
-                transaction = snftmint_contract.functions.upgradeNFT(snftmint_id, nft_level,block_number,final_hash).build_transaction(
-                        {
-                            "chainId": WEB3_CHAINID,
-                            "from": sender_address,
-                            "gas": 20000000,  # 最大 Gas 用量
-                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                        }
-                    )
+                transaction = snftmint_contract.functions.upgradeNFT(snftmint_id, nft_level,block_number,final_hash).build_transaction(base_transaction)
                 logger.debug(f"upgradeNFT transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # snftmint.mintNFT
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
 
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The { 'mintNFT' if snftmint_id==0 else 'upgradeNFT' } transaction was send successfully! - snftmint_id: {snftmint_id} nft_level: {nft_level}")
@@ -3078,48 +3018,20 @@ class GaeaDailyTask:
             anftmint_id = anftmint_contract.functions.getTokenID( sender_address ).call()
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} anftmint_id: {anftmint_id}")
             
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 铸造
             if anftmint_id==0:
-                transaction = anftmint_contract.functions.mintNFT(nft_ticket,block_number,final_hash).build_transaction(
-                        {
-                            "chainId": WEB3_CHAINID,
-                            "from": sender_address,
-                            "gas": 20000000,  # 最大 Gas 用量
-                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                        }
-                    )
+                transaction = anftmint_contract.functions.mintNFT(nft_ticket,block_number,final_hash).build_transaction(base_transaction)
                 logger.debug(f"mintNFT transaction: {transaction}")
             else:
-                transaction = anftmint_contract.functions.upgradeNFT(anftmint_id, nft_ticket,block_number,final_hash).build_transaction(
-                        {
-                            "chainId": WEB3_CHAINID,
-                            "from": sender_address,
-                            "gas": 20000000,  # 最大 Gas 用量
-                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                        }
-                    )
+                transaction = anftmint_contract.functions.upgradeNFT(anftmint_id, nft_ticket,block_number,final_hash).build_transaction(base_transaction)
                 logger.debug(f"upgradeNFT transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # anftmint.mintNFT
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
 
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The { 'mintNFT' if anftmint_id==0 else 'upgradeNFT' } transaction was send successfully! - anftmint_id: {anftmint_id} nft_ticket: {nft_ticket}")
@@ -3271,80 +3183,46 @@ class GaeaDailyTask:
             # USDC账户余额
             sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
             logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {web3_obj.from_wei(sender_balance_usdc, 'mwei')}")
+            sender_usdc = web3_obj.from_wei(sender_balance_usdc, 'mwei')
+            logger.debug(f"sender_usdc: {sender_usdc}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {sender_usdc}")
             time.sleep(1)
-            if 1000000 < sender_balance_usdc and pooling_addr != '': # 大于1开始归集USDC
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            if 10000000 < sender_balance_usdc and pooling_addr != '': # 大于10开始归集USDC
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 转账
-                transaction = usdc_contract.functions.transfer(pooling_address, sender_balance_usdc).build_transaction(
-                        {
-                            "chainId": WEB3_CHAINID,
-                            "from": sender_address,
-                            "gas": 20000000,  # 最大 Gas 用量
-                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                        }
-                    )
+                transaction = usdc_contract.functions.transfer(pooling_address, sender_balance_usdc).build_transaction(base_transaction)
                 logger.debug(f"transfer transaction: {transaction}")
 
                 # 发送交易
-                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.transfer
                 if tx_success == False:
                     logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
 
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction was send successfully! - usdc: {sender_balance_usdc}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction was send successfully! - usdc: {sender_usdc}")
             
             # # SXP账户余额
             # sender_balance_sxp = sxp_contract.functions.balanceOf(sender_address).call()
             # logger.debug(f"sender_balance_sxp: {sender_balance_sxp}")
+            # sender_sxp = web3_obj.from_wei(sender_balance_sxp, 'mwei')
+            # logger.debug(f"sender_sxp: {sender_sxp}")
             # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - sxp: {web3_obj.from_wei(sender_balance_sxp, 'mwei')}")
             # time.sleep(1)
             # if 100000000 < sender_balance_sxp and pooling_addr != '': # 大于100开始归集SXP
-            #     # 获取当前Gas
-            #     latest_block = web3_obj.eth.get_block('latest')
-            #     if latest_block is None:
-            #         logger.error(f"Ooops! Failed to eth.get_block.")
-            #         raise Exception("Failed to eth.get_block.")
-            #     base_fee_per_gas = latest_block['baseFeePerGas']
-            #     priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            #     max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            #     logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            #     logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            #     logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            #     # 使用公共函数构建基础交易参数
+            #     base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             #     # 构建交易 - 转账
-            #     transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(
-            #             {
-            #                 "chainId": WEB3_CHAINID,
-            #                 "from": sender_address,
-            #                 "gas": 20000000,  # 最大 Gas 用量
-            #                 "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-            #                 "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-            #                 "nonce": web3_obj.eth.get_transaction_count(sender_address),
-            #             }
-            #         )
+            #     transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(base_transaction)
             #     logger.debug(f"transfer transaction: {transaction}")
 
             #     # 发送交易
-            #     tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            #     tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # sxp.transfer
             #     if tx_success == False:
             #         logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
             #         raise Exception("Failed to send_transaction.")
 
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction was send successfully! - sxp: {sender_balance_sxp}")
+            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction was send successfully! - sxp: {sender_sxp}")
             
             return 0
         except Exception as error:
