@@ -449,7 +449,7 @@ class GaeaDailyTask:
             if code not in [200, 201]:
                 username = self.client.email
             
-            delay = random.randint(5, 10)
+            delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- register
@@ -3532,7 +3532,7 @@ class GaeaDailyTask:
                     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete response: {clicker_response}")
 
                     idx+=1
-                    delay = random.randint(1, 5)
+                    delay = random.randint(10, 20)
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete delay: {delay} seconds")
                     await asyncio.sleep(delay)
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete count: {idx}")
@@ -4788,7 +4788,7 @@ class GaeaDailyTask:
                                 # 继续执行下一个任务而不是中断整个流程
                                 continue
                             
-                            delay = random.randint(60, 90)
+                            delay = random.randint(60, 90) # visionburn
                             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn delay: {delay} seconds")
                             await asyncio.sleep(delay)
             
@@ -4881,10 +4881,14 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling response: {clicker_response}")
 
-            if clicker_response>0:
-                delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # funds_pooling
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling delay: {delay} seconds")
-                await asyncio.sleep(delay)
+            # if clicker_response>0:
+            #     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # funds_pooling
+            #     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling delay: {delay} seconds")
+            #     await asyncio.sleep(delay)
+            delay = random.randint(60, 90) # funds_pooling
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_fundspooling except: {error}")
@@ -5210,7 +5214,7 @@ class GaeaDailyTask:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tickettrain response: {clicker_response}")
             
-                delay = random.randint(60, 90)
+                delay = random.randint(60, 90) # ticket_deeptrain
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain delay: {delay} seconds")
                 await asyncio.sleep(delay)
             return "SUCCESS"
@@ -5254,7 +5258,7 @@ class GaeaDailyTask:
                 
                 is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
-                delay = random.randint(60, 90)
+                delay = random.randint(60, 90) # godhoodinfo
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
                 choice=os.environ.get('CHOOSE_CHOICE', '0')
@@ -5319,7 +5323,7 @@ class GaeaDailyTask:
                 
                 is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
-                delay = random.randint(60, 90)
+                delay = random.randint(60, 90) # godhoodinfo
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
                 choice=os.environ.get('CHOOSE_CHOICE', '0')
@@ -5337,7 +5341,7 @@ class GaeaDailyTask:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketchoice response: {clicker_response}")
 
-                delay = random.randint(60, 90)
+                delay = random.randint(60, 90) # ticket_deepchoice
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deepchoice delay: {delay} seconds")
                 await asyncio.sleep(delay)
             return "SUCCESS"
@@ -5352,20 +5356,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            # # -------------------------------------------------------------------------- 1 checkin
-            # await self.checkin_clicker()
-
-            # delay = random.randint(10, 20)
-            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 checkin delay: {delay} seconds")
-            # await asyncio.sleep(delay)
-
-            # # -------------------------------------------------------------------------- 2 signin
-            # await self.signin_clicker()
-
-            # delay = random.randint(10, 20)
-            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 signin delay: {delay} seconds")
-            # await asyncio.sleep(delay)
-
             # -------------------------------------------------------------------------- dailylist
             clicker_response = await self.dailylist_clicker()
             if clicker_response is None:
@@ -5477,7 +5467,7 @@ class GaeaDailyTask:
                     if len(self.client.prikey) in [64,66]:
                         await self.deeptrain_clicker(emotion, eth_address)
 
-                        delay = random.randint(60, 90)
+                        delay = random.randint(60, 90) # deeptrain
                         logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deeptrain delay: {delay} seconds")
                         await asyncio.sleep(delay)
                 elif task == '2':  # tickettrain
@@ -5501,7 +5491,7 @@ class GaeaDailyTask:
                         return "ERROR"
                     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tickettrain response: {clicker_response}")
                     
-                    delay = random.randint(60, 90)
+                    delay = random.randint(60, 90) # ticket_deeptrain
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain delay: {delay} seconds")
                     await asyncio.sleep(delay)
             
@@ -5547,7 +5537,7 @@ class GaeaDailyTask:
             
             is_godhood_id = "1" if clicker_response['mood'] else "0"
             
-            delay = random.randint(60, 90)
+            delay = random.randint(60, 90) # godhoodinfo
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
             await asyncio.sleep(delay)
             choice=os.environ.get('CHOOSE_CHOICE', '0')
@@ -5569,7 +5559,7 @@ class GaeaDailyTask:
                     if len(self.client.prikey) in [64,66]:
                         await self.deepchoice_clicker(choice_detail, eth_address)
 
-                        delay = random.randint(60, 90)
+                        delay = random.randint(60, 90) # deepchoice
                         logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deepchoice delay: {delay} seconds")
                         await asyncio.sleep(delay)
                 elif task == '2':  # ticketchoice
@@ -5593,7 +5583,7 @@ class GaeaDailyTask:
                         return "ERROR"
                     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketchoice response: {clicker_response}")
                     
-                    delay = random.randint(60, 90)
+                    delay = random.randint(60, 90) # ticket_deepchoice
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deepchoice delay: {delay} seconds")
                     await asyncio.sleep(delay)
             
