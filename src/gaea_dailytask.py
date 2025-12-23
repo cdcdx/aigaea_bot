@@ -42,38 +42,25 @@ def connect_web3_rpc():
             raise Exception("Failed to eth.is_connected.")
     return web3_obj
 
-class GaeaDailyTask:
-    def __init__(self, client: GaeaClient) -> None:
-        self.client = client
+class TransactionHelper:
+    """
+    以太坊交易辅助类，提供交易构建、发送和重试机制
+    """
+    
+    def __init__(self, web3_obj, max_base_fee_gwei=20, max_priority_fee_gwei=2, default_gas_limit=200000):
+        self.web3_obj = web3_obj
+        self.max_base_fee = web3_obj.to_wei(max_base_fee_gwei, 'gwei')
+        self.max_priority_fee = web3_obj.to_wei(max_priority_fee_gwei, 'gwei')
+        self.default_gas_limit = default_gas_limit
+        self.gas_increase_factor = 1.3
 
-    def getheaders(self):
-        return {
-            "Accept": "application/json",
-            "Accept-Encoding": "gzip, deflate",
-            "Accept-Language": "en,zh-CN;q=0.9,zh;q=0.8,en-US;q=0.7",
-            "Authorization": f"Bearer {self.client.token}",
-            "Connection": "keep-alive",
-            "Content-Type": "application/json",
-            "Origin": "https://app.gaea.la",
-            "Referer": "https://app.gaea.la/",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-site",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 12; K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/95.0.4638.74 Safari/537.36",
-            "X-Requested-With": "org.telegram.messenger.web",
-        }
-
-    # -------------------------------------------------------------------------- web3
-
-    # build base transaction
-    def build_base_transaction(self, web3_obj, sender_address, config_chainid):
+    def build_base_transaction(self, sender_address, config_chainid):
         """
         构建基础交易参数
         """
-        # 获取上个区块Gas
-        latest_block = web3_obj.eth.get_block('latest')
+        latest_block = self.web3_obj.eth.get_block('latest')
         base_fee = latest_block['baseFeePerGas']
-        priority_fee = web3_obj.eth.max_priority_fee  # 获取推荐的小费
+        priority_fee = self.web3_obj.eth.max_priority_fee
         priority_fee = int(priority_fee * 1.5)  # 增加50%的缓冲
         max_fee = int(base_fee * 1.5) + priority_fee   # 增加50%的缓冲
         
@@ -87,231 +74,11 @@ class GaeaDailyTask:
         return {
             "chainId": config_chainid,
             "from": sender_address,
-            # "nonce": web3_obj.eth.get_transaction_count(sender_address),
-            "nonce": web3_obj.eth.get_transaction_count(sender_address, 'pending'),
+            "nonce": self.web3_obj.eth.get_transaction_count(sender_address, 'pending'),
             "maxFeePerGas": max_fee,
             "maxPriorityFeePerGas": priority_fee,
-            # "gas": base_fee * priority_fee_per_gas,
-            # "gas": 20000000,  # 最大 Gas 用量
         }
 
-    # send transaction
-    def send_transaction_with_retry(self, web3_obj, transaction, web3_prikey, max_retries=3, retry_interval=3):
-        """
-        发送以太坊交易，带重试机制
-        
-        Args:
-            web3_obj: Web3实例
-            transaction: 交易对象
-            web3_prikey: 私钥
-            max_retries: 最大重试次数
-            retry_interval: 重试间隔时间
-        """
-        # 设置合理的费用上限，避免过高费用
-        MAX_BASE_FEE = web3_obj.to_wei(20, 'gwei')  # 最高基础费用
-        MAX_PRIORITY_FEE = web3_obj.to_wei(2, 'gwei')  # 最高优先费用
-        
-        # 初始gas限制和增长策略
-        default_gas_limit = 200000
-        gas_increase_factor = 1.3  # gas限制增长因子
-        
-        # 为避免在循环中重复定义，将一些变量在循环外定义
-        attempt = 0
-        initial_base_fee = None
-        initial_priority_fee = None
-        tx_bytes = None
-        
-        while attempt < max_retries:
-            try:
-                logger.debug(f"transaction: {transaction}")
-                
-                # 动态更新 Gas 参数
-                latest_block = web3_obj.eth.get_block('latest')
-                base_fee = latest_block['baseFeePerGas']
-                current_priority_fee = web3_obj.eth.max_priority_fee
-                
-                # 记录初始费用用于比较
-                if attempt == 0:
-                    initial_base_fee = base_fee
-                    initial_priority_fee = current_priority_fee
-                
-                # 根据尝试次数调整费用
-                if attempt > 0:
-                    # 费用增长策略: 每次尝试增加15%费用，但不超过上限
-                    fee_multiplier = 1.15 ** attempt
-                    priority_fee = min(
-                        int(initial_priority_fee * fee_multiplier), 
-                        MAX_PRIORITY_FEE
-                    )
-                    # 更新nonce
-                    transaction['nonce'] = web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
-                else:
-                    # 初始交易使用保守的费用
-                    priority_fee = min(int(current_priority_fee * 1.1), MAX_PRIORITY_FEE)
-                    
-                # 计算最大费用
-                max_fee = min(
-                    int(base_fee * 1.1) + priority_fee,
-                    MAX_BASE_FEE
-                )
-                
-                # 确保 max_fee >= priority_fee
-                max_fee = max(max_fee, priority_fee)
-                
-                # 更新交易参数
-                transaction.update({
-                    "maxFeePerGas": max_fee,
-                    "maxPriorityFeePerGas": priority_fee,
-                })
-                logger.debug(f"update transaction fees: maxFee={max_fee}, priorityFee={priority_fee}")
-                
-                # 估算 Gas
-                gas_limit = default_gas_limit  # 默认值
-                try:
-                    estimated_gas = web3_obj.eth.estimate_gas(transaction)
-                    # 增加合理的gas限制缓冲，随着重试次数增加而增加
-                    buffer_multiplier = min(1.0 + (0.1 * attempt), gas_increase_factor)  # 最多1.3倍缓冲
-                    gas_limit = int(estimated_gas * buffer_multiplier)
-                    if gas_limit < 100000:
-                        gas_limit = 100000
-                except Exception as e:
-                    logger.error(f"Failed to eth.estimate_gas: {str(e)}")
-                    decoded_error = self.decode_revert_reason(str(e)) if '0x' in str(e) else str(e)
-                    
-                    # 根据错误类型调整gas策略
-                    error_str = str(e).lower()
-                    if attempt == 0:
-                        # 第一次尝试失败时使用默认gas值
-                        gas_limit = default_gas_limit
-                        logger.warning(f"Using default gas limit: {gas_limit}")
-                    elif "intrinsic gas too low" in error_str or "out of gas" in error_str:
-                        # 如果是gas不足相关错误，增加gas限制
-                        gas_limit = int(gas_limit * gas_increase_factor)
-                        logger.warning(f"Increasing gas limit to: {gas_limit} due to gas related error")
-                    elif "replacement transaction underpriced" in error_str:
-                        # 如果是费用不足，增加费用但保持gas不变
-                        gas_limit = min(int(gas_limit * 1.15), default_gas_limit*2)  # 轻微增加gas作为备选方案
-                        logger.warning(f"Adjusting gas limit for fee related error: {gas_limit}")
-                    elif "nonce too low" in error_str:
-                        # nonce错误时保持gas不变
-                        logger.warning("Nonce error, keeping gas limit unchanged")
-                    elif attempt < max_retries - 1:
-                        # 其他错误情况下适度增加gas并继续尝试
-                        gas_limit = int(gas_limit * 1.25)
-                        logger.warning(f"Moderately increasing gas limit to: {gas_limit}")
-                    else:
-                        # 最后一次尝试仍然失败则返回错误
-                        return False, {"tx_hash": "eth.estimate_gas", "msg": decoded_error}
-                
-                logger.debug(f"gas_limit: {gas_limit}")
-                transaction["gas"] = gas_limit
-                logger.debug(f"update transaction with gas: {transaction}")
-                
-                # 使用私钥签名交易
-                signed_transaction = web3_obj.eth.account.sign_transaction(transaction, web3_prikey)
-                logger.debug(f"signed_transaction: {signed_transaction}")
-
-                # 发送交易
-                tx_hash = web3_obj.eth.send_raw_transaction(signed_transaction.raw_transaction)
-                logger.debug(f"Transaction sent - tx_hash: {tx_hash.hex()}")
-                tx_bytes = f"0x{tx_hash.hex()}"
-                
-                # 等待交易完成
-                try:
-                    receipt_timeout = 30 if attempt == 0 else 15
-                    receipt = web3_obj.eth.wait_for_transaction_receipt(tx_hash, timeout=receipt_timeout)
-                except Exception as e:
-                    logger.error(f"Transaction not included in chain after {receipt_timeout} seconds: {str(e)}")
-                    return False, {"tx_hash": tx_bytes, "msg": f"Transaction not included in chain after {receipt_timeout} seconds"}
-                
-                logger.debug(f"Waiting to complete - receipt: {receipt}")
-                tx_bytes = f"0x{tx_hash.hex()}"
-                    
-                if receipt['status'] == 1:
-                    logger.success(f"Transaction successful - tx_hash: {tx_bytes}")
-                    return True, {"tx_hash": tx_bytes}
-                else:
-                    logger.error(f"Transaction failed - tx_hash: {tx_bytes}")
-                    return False, {"tx_hash": tx_bytes}
-                
-            except ValueError as e:
-                logger.warning(f"Failed to transaction ValueError ETH : {str(e)}")
-                # 处理ValueError异常
-                try:
-                    error_message = e.args[0].get('message', '') if isinstance(e.args[0], dict) else str(e)
-                    error_code = e.args[0].get('code', None) if isinstance(e.args[0], dict) else None
-                    
-                    if 'rpc error' in error_message.lower() or 'node error' in error_message.lower():
-                        logger.error(f"RPC node error encountered: {error_message}")
-                        # 返回更明确的错误信息，指示这是RPC节点错误
-                        result = False, {"tx_hash": tx_bytes, "msg": f"RPC node error: {error_message}. Please check node connectivity and logs for more information."}
-                    elif 'intrinsic gas too low' in error_message.lower():
-                        # 如果是gas过低错误，在下次尝试时增加gas
-                        gas_limit = int(gas_limit * gas_increase_factor)
-                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
-                    elif 'replacement transaction underpriced' in error_message.lower():
-                        # 费用不足错误，下次尝试时增加费用
-                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
-                    elif 'nonce too low' in error_message.lower():
-                        # nonce错误，更新nonce
-                        transaction['nonce'] = web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
-                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
-                    else:
-                        result = False, {"tx_hash": tx_bytes, "msg": error_message, "code": error_code}
-                except Exception as e:
-                    result = False, {"tx_hash": tx_bytes, "msg": str(e)}
-                return result
-            
-            except Exception as e:
-                error_msg = str(e).lower()
-                if "replacement transaction underpriced" in error_msg:
-                    logger.warning(f"Priority fee insufficient, will increase... (Try {attempt+1}/{max_retries})")
-                    if attempt + 1 >= max_retries:
-                        logger.error(f"Maximum number of retries: {error_msg}")
-                        return False, {"tx_hash": "", "msg": f"Maximum number of retries: {error_msg}"}
-                elif "max fee per gas" in error_msg:
-                    logger.warning(f"Basic fee insufficient, will increase... (Try {attempt+1}/{max_retries})")
-                elif "nonce too low" in error_msg:
-                    logger.warning(f"Nonce is too low, get the latest nonce... (Try {attempt+1}/{max_retries})")
-                    transaction['nonce'] = web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
-                elif "already known" in error_msg:
-                    logger.warning(f"Awaiting confirmation... (Try {attempt+1}/{max_retries})")
-                    # 交易已经在内存池中，我们应该查询它的状态而不是简单等待
-                    try:
-                        # 尝试通过交易哈希获取交易详情
-                        pending_tx = web3_obj.eth.get_transaction(signed_transaction.hash)
-                        if pending_tx:
-                            logger.info(f"Found pending transaction: {signed_transaction.hash.hex()}")
-                            # 等待交易确认
-                            try:
-                                receipt = web3_obj.eth.wait_for_transaction_receipt(signed_transaction.hash, timeout=30)
-                                if receipt['status'] == 1:
-                                    logger.success(f"Transaction successful - tx_hash: {signed_transaction.hash.hex()}")
-                                    return True, {"tx_hash": signed_transaction.hash.hex()}
-                                else:
-                                    logger.error(f"Transaction failed - tx_hash: {signed_transaction.hash.hex()}")
-                                    return False, {"tx_hash": signed_transaction.hash.hex()}
-                            except Exception as wait_e:
-                                logger.error(f"Pending transaction timeout: {str(wait_e)}")
-                    except Exception as fetch_e:
-                        logger.warning(f"Unable to retrieve pending transactions: {str(fetch_e)}")
-                    
-                    # 交易已经在内存池中，等待确认
-                    time.sleep(retry_interval)
-                    attempt += 1
-                    continue
-                else:
-                    logger.error(f"Failed to send transaction: {e} (Try {attempt+1}/{max_retries})")
-                
-                attempt += 1
-                if attempt < max_retries:
-                    logger.debug(f"Retrying in {retry_interval} seconds...")
-                    time.sleep(retry_interval)
-                else:
-                    logger.error(f"Max retries reached. Failed to eth.send_raw_transaction: {str(e)}")
-                    return False, {"tx_hash": "send_raw_transaction", "msg": str(e)}
-
-    # revert reason
     def decode_revert_reason(self, hex_error):
         """
         解析 Solidity 合约的 revert 错误信息
@@ -344,6 +111,281 @@ class GaeaDailyTask:
                 return hex_error
         except Exception as e:
             return f"Unable to resolve: {str(e)}"
+
+    def _adjust_gas_by_error_type(self, attempt, max_retries, gas_limit, error_str):
+        """
+        根据错误类型调整gas策略
+        """
+        if attempt == 0:
+            # 第一次尝试失败时使用默认gas值
+            return self.default_gas_limit
+        elif "intrinsic gas too low" in error_str or "out of gas" in error_str:
+            # 如果是gas不足相关错误，增加gas限制
+            return int(gas_limit * self.gas_increase_factor)
+        elif "replacement transaction underpriced" in error_str:
+            # 如果是费用不足，增加费用但保持gas不变
+            return min(int(gas_limit * 1.15), self.default_gas_limit*2)
+        elif "nonce too low" in error_str:
+            # nonce错误时保持gas不变
+            return gas_limit
+        elif attempt < max_retries - 1:
+            # 其他错误情况下适度增加gas并继续尝试
+            return int(gas_limit * 1.25)
+        else:
+            # 最后一次尝试仍然失败则返回原值
+            return gas_limit
+
+    def send_transaction_with_retry(self, transaction, web3_prikey, max_retries=3, retry_interval=3):
+        """
+        发送以太坊交易，带重试机制
+        
+        Args:
+            transaction: 交易对象
+            web3_prikey: 私钥
+            max_retries: 最大重试次数
+            retry_interval: 重试间隔时间
+        """
+        # 为避免在循环中重复定义，将一些变量在循环外定义
+        attempt = 0
+        initial_base_fee = None
+        initial_priority_fee = None
+        tx_bytes = None
+        
+        while attempt < max_retries:
+            try:
+                logger.debug(f"transaction: {transaction}")
+                
+                # 动态更新 Gas 参数
+                latest_block = self.web3_obj.eth.get_block('latest')
+                base_fee = latest_block['baseFeePerGas']
+                current_priority_fee = self.web3_obj.eth.max_priority_fee
+                
+                # 记录初始费用用于比较
+                if attempt == 0:
+                    initial_base_fee = base_fee
+                    initial_priority_fee = current_priority_fee
+                
+                # 根据尝试次数调整费用
+                if attempt > 0:
+                    # 费用增长策略: 每次尝试增加15%费用，但不超过上限
+                    fee_multiplier = 1.15 ** attempt
+                    priority_fee = min(
+                        int(initial_priority_fee * fee_multiplier), 
+                        self.max_priority_fee
+                    )
+                    # 更新nonce
+                    transaction['nonce'] = self.web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
+                else:
+                    # 初始交易使用保守的费用
+                    priority_fee = min(int(current_priority_fee * 1.1), self.max_priority_fee)
+                    
+                # 计算最大费用
+                max_fee = min(
+                    int(base_fee * 1.1) + priority_fee,
+                    self.max_base_fee
+                )
+                
+                # 确保 max_fee >= priority_fee
+                max_fee = max(max_fee, priority_fee)
+                
+                # 更新交易参数
+                transaction.update({
+                    "maxFeePerGas": max_fee,
+                    "maxPriorityFeePerGas": priority_fee,
+                })
+                logger.debug(f"update transaction fees: maxFee={max_fee}, priorityFee={priority_fee}")
+                
+                # 估算 Gas
+                gas_limit = self.default_gas_limit  # 默认值
+                try:
+                    estimated_gas = self.web3_obj.eth.estimate_gas(transaction)
+                    # 增加合理的gas限制缓冲，随着重试次数增加而增加
+                    buffer_multiplier = min(1.0 + (0.1 * attempt), self.gas_increase_factor)  # 最多1.3倍缓冲
+                    gas_limit = int(estimated_gas * buffer_multiplier)
+                    if gas_limit < 100000:
+                        gas_limit = 100000
+                except Exception as e:
+                    logger.error(f"Failed to eth.estimate_gas: {str(e)}")
+                    decoded_error = self.decode_revert_reason(str(e)) if '0x' in str(e) else str(e)
+                    
+                    # 根据错误类型调整gas策略
+                    error_str = str(e).lower()
+                    gas_limit = self._adjust_gas_by_error_type(attempt, max_retries, gas_limit, error_str)
+                    
+                    if attempt >= max_retries - 1:
+                        # 最后一次尝试仍然失败则返回错误
+                        return False, {"tx_hash": "eth.estimate_gas", "msg": decoded_error}
+                    else:
+                        logger.warning(f"Adjusting gas limit to: {gas_limit}")
+                
+                logger.debug(f"gas_limit: {gas_limit}")
+                transaction["gas"] = gas_limit
+                logger.debug(f"update transaction with gas: {transaction}")
+                
+                # 使用私钥签名交易
+                signed_transaction = self.web3_obj.eth.account.sign_transaction(transaction, web3_prikey)
+                logger.debug(f"signed_transaction: {signed_transaction}")
+
+                # 发送交易
+                tx_hash = self.web3_obj.eth.send_raw_transaction(signed_transaction.raw_transaction)
+                logger.debug(f"Transaction sent - tx_hash: {tx_hash.hex()}")
+                tx_bytes = f"0x{tx_hash.hex()}"
+                
+                # 等待交易完成
+                try:
+                    receipt_timeout = 30 if attempt == 0 else 15
+                    receipt = self.web3_obj.eth.wait_for_transaction_receipt(tx_hash, timeout=receipt_timeout)
+                except Exception as e:
+                    logger.error(f"Transaction not included in chain after {receipt_timeout} seconds: {str(e)}")
+                    return False, {"tx_hash": tx_bytes, "msg": f"Transaction not included in chain after {receipt_timeout} seconds"}
+                
+                logger.debug(f"Waiting to complete - receipt: {receipt}")
+                tx_bytes = f"0x{tx_hash.hex()}"
+                    
+                if receipt['status'] == 1:
+                    logger.success(f"Transaction successful - tx_hash: {tx_bytes}")
+                    return True, {"tx_hash": tx_bytes}
+                else:
+                    logger.error(f"Transaction failed - tx_hash: {tx_bytes}")
+                    return False, {"tx_hash": tx_bytes}
+                
+            except ValueError as e:
+                logger.warning(f"Failed to transaction ValueError ETH : {str(e)}")
+                # 处理ValueError异常
+                try:
+                    error_message = e.args[0].get('message', '') if isinstance(e.args[0], dict) else str(e)
+                    error_code = e.args[0].get('code', None) if isinstance(e.args[0], dict) else None
+                    
+                    if 'rpc error' in error_message.lower() or 'node error' in error_message.lower():
+                        logger.error(f"RPC node error encountered: {error_message}")
+                        # 返回更明确的错误信息，指示这是RPC节点错误
+                        result = False, {"tx_hash": tx_bytes, "msg": f"RPC node error: {error_message}. Please check node connectivity and logs for more information."}
+                    elif 'intrinsic gas too low' in error_message.lower():
+                        # 如果是gas过低错误，在下次尝试时增加gas
+                        gas_limit = int(gas_limit * self.gas_increase_factor)
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
+                    elif 'replacement transaction underpriced' in error_message.lower():
+                        # 费用不足错误，下次尝试时增加费用
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
+                    elif 'nonce too low' in error_message.lower():
+                        # nonce错误，更新nonce
+                        transaction['nonce'] = self.web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
+                    else:
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message, "code": error_code}
+                except Exception as e:
+                    result = False, {"tx_hash": tx_bytes, "msg": str(e)}
+                return result
+            
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "replacement transaction underpriced" in error_msg:
+                    logger.warning(f"Priority fee insufficient, will increase... (Try {attempt+1}/{max_retries})")
+                    if attempt + 1 >= max_retries:
+                        logger.error(f"Maximum number of retries: {error_msg}")
+                        return False, {"tx_hash": "", "msg": f"Maximum number of retries: {error_msg}"}
+                elif "max fee per gas" in error_msg:
+                    logger.warning(f"Basic fee insufficient, will increase... (Try {attempt+1}/{max_retries})")
+                elif "nonce too low" in error_msg:
+                    logger.warning(f"Nonce is too low, get the latest nonce... (Try {attempt+1}/{max_retries})")
+                    transaction['nonce'] = self.web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
+                elif "already known" in error_msg:
+                    logger.warning(f"Awaiting confirmation... (Try {attempt+1}/{max_retries})")
+                    # 交易已经在内存池中，我们应该查询它的状态而不是简单等待
+                    try:
+                        # 尝试通过交易哈希获取交易详情
+                        pending_tx = self.web3_obj.eth.get_transaction(signed_transaction.hash)
+                        if pending_tx:
+                            logger.info(f"Found pending transaction: {signed_transaction.hash.hex()}")
+                            # 等待交易确认
+                            try:
+                                receipt = self.web3_obj.eth.wait_for_transaction_receipt(signed_transaction.hash, timeout=30)
+                                if receipt['status'] == 1:
+                                    logger.success(f"Transaction successful - tx_hash: {signed_transaction.hash.hex()}")
+                                    return True, {"tx_hash": signed_transaction.hash.hex()}
+                                else:
+                                    logger.error(f"Transaction failed - tx_hash: {signed_transaction.hash.hex()}")
+                                    return False, {"tx_hash": signed_transaction.hash.hex()}
+                            except Exception as wait_e:
+                                logger.error(f"Pending transaction timeout: {str(wait_e)}")
+                    except Exception as fetch_e:
+                        logger.warning(f"Unable to retrieve pending transactions: {str(fetch_e)}")
+                    
+                    # 交易已经在内存池中，等待确认
+                    time.sleep(retry_interval)
+                    attempt += 1
+                    continue
+                else:
+                    logger.error(f"Failed to send transaction: {e} (Try {attempt+1}/{max_retries})")
+                
+                attempt += 1
+                if attempt < max_retries:
+                    logger.debug(f"Retrying in {retry_interval} seconds...")
+                    time.sleep(retry_interval)
+                else:
+                    logger.error(f"Max retries reached. Failed to eth.send_raw_transaction: {str(e)}")
+                    return False, {"tx_hash": "send_raw_transaction", "msg": str(e)}
+
+class GaeaDailyTask:
+    def __init__(self, client: GaeaClient) -> None:
+        self.client = client
+        # 创建一个共享的web3实例用于解码错误信息
+        self._web3_instance = connect_web3_rpc()
+
+    def getheaders(self):
+        return {
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate",
+            "Accept-Language": "en,zh-CN;q=0.9,zh;q=0.8,en-US;q=0.7",
+            "Authorization": f"Bearer {self.client.token}",
+            "Connection": "keep-alive",
+            "Content-Type": "application/json",
+            "Origin": "https://app.gaea.la",
+            "Referer": "https://app.gaea.la/",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 12; K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/95.0.4638.74 Safari/537.36",
+            "X-Requested-With": "org.telegram.messenger.web",
+        }
+
+    # -------------------------------------------------------------------------- web3
+
+    # build base transaction
+    def build_base_transaction(self, web3_obj, sender_address, config_chainid):
+        """
+        构建基础交易参数
+        """
+        tx_helper = TransactionHelper(web3_obj)
+        return tx_helper.build_base_transaction(sender_address, config_chainid)
+
+    # send transaction
+    def send_transaction_with_retry(self, web3_obj, transaction, web3_prikey, max_retries=3, retry_interval=3):
+        """
+        发送以太坊交易，带重试机制
+        
+        Args:
+            web3_obj: Web3实例
+            transaction: 交易对象
+            web3_prikey: 私钥
+            max_retries: 最大重试次数
+            retry_interval: 重试间隔时间
+        """
+        tx_helper = TransactionHelper(web3_obj)
+        return tx_helper.send_transaction_with_retry(transaction, web3_prikey, max_retries, retry_interval)
+
+    # revert reason
+    def decode_revert_reason(self, hex_error):
+        """
+        解析 Solidity 合约的 revert 错误信息
+        
+        Args:
+            hex_error: 16进制错误信息
+        Returns:
+            str: 解码后的错误信息
+        """
+        tx_helper = TransactionHelper(self._web3_instance)
+        return tx_helper.decode_revert_reason(hex_error)
 
     # -------------------------------------------------------------------------- 接口
 
@@ -1608,7 +1650,7 @@ class GaeaDailyTask:
                 raise Exception(f"Incorrect private key")
             
             # -------------------------------------------------------------------------- godhoodid
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1709,7 +1751,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
 
             # -------------------------------------------------------------------------- godhoodid
-            web3_obj = web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1820,7 +1862,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
 
             # -------------------------------------------------------------------------- invite
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1850,7 +1892,7 @@ class GaeaDailyTask:
                 raise Exception(f"Incorrect private key")
             
             # -------------------------------------------------------------------------- invite
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1945,7 +1987,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker tick_level: {tick_level}")
             # -------------------------------------------------------------------------- ticket_buy
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2053,7 +2095,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
 
             # -------------------------------------------------------------------------- isdeeptrain
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2103,7 +2145,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker emotion_int: {emotion_int}")
             # -------------------------------------------------------------------------- deeptrain
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2296,7 +2338,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
 
             # -------------------------------------------------------------------------- Reward
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2331,7 +2373,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionclaimed_clicker eth_address: {eth_address[:10]}")
             # -------------------------------------------------------------------------- Reward
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2394,7 +2436,7 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
             # -------------------------------------------------------------------------- deepchoice_list
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             # 情绪合约地址
             choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
@@ -2436,7 +2478,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
 
             # -------------------------------------------------------------------------- isdeepchoice
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2474,7 +2516,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker choice_int: {choice_int}")
             # -------------------------------------------------------------------------- deepchoice
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2632,7 +2674,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
 
             # -------------------------------------------------------------------------- Reward
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2663,7 +2705,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceclaimed_clicker eth_address: {eth_address[:10]}")
             # -------------------------------------------------------------------------- Reward
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2727,7 +2769,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
 
             # -------------------------------------------------------------------------- is_snftmint
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2796,7 +2838,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftmint_clicker eth_address: {eth_address[:10]}")
             # -------------------------------------------------------------------------- snftmint
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2947,7 +2989,7 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
 
             # -------------------------------------------------------------------------- is_anftmint
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -3016,7 +3058,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker eth_address: {eth_address[:10]}")
             # -------------------------------------------------------------------------- anftmint
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -3165,7 +3207,7 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
             # -------------------------------------------------------------------------- balanceOf
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
