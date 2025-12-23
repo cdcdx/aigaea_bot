@@ -955,7 +955,9 @@ class GaeaDailyTask:
                     for i in range(10):
                         cdkeys.append(datas[i]['cdkey'])
                 else:
-                    cdkeys.append(datas[0]['cdkey'])
+                    # cdkeys.append(datas[0]['cdkey'])
+                    for i in range(total):
+                        cdkeys.append(datas[i]['cdkey'])
                 return {'cdkeys': cdkeys}
             else:
                 message = response.get('msg', None)
@@ -5195,12 +5197,12 @@ class GaeaDailyTask:
             clicker_response = await self.is_deeptrain_clicker(eth_address)
             if clicker_response is False:
                 # -------------------------------------------------------------------------- ticketbox_list
-                clicker_response = await self.ticketbox_list_clicker()
-                if clicker_response is None:
+                ticket_response = await self.ticketbox_list_clicker()
+                if ticket_response is None:
                     return "ERROR"
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {clicker_response}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {ticket_response}")
                 
-                cdkeys = clicker_response.get("cdkeys", [])
+                cdkeys = ticket_response.get("cdkeys", [])
                 if len(cdkeys) == 0:
                     logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
                     return "ERROR"
@@ -5302,12 +5304,12 @@ class GaeaDailyTask:
             clicker_response = await self.is_deepchoice_clicker(eth_address)
             if clicker_response is False:
                 # -------------------------------------------------------------------------- ticketbox_list
-                clicker_response = await self.ticketbox_list_clicker()
-                if clicker_response is None:
+                ticket_response = await self.ticketbox_list_clicker()
+                if ticket_response is None:
                     return "ERROR"
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {clicker_response}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {ticket_response}")
                 
-                cdkeys = clicker_response.get("cdkeys", [])
+                cdkeys = ticket_response.get("cdkeys", [])
                 if len(cdkeys) == 0:
                     logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
                     return "ERROR"
@@ -5472,12 +5474,12 @@ class GaeaDailyTask:
                         await asyncio.sleep(delay)
                 elif task == '2':  # tickettrain
                     # -------------------------------------------------------------------------- ticketbox_list
-                    clicker_response = await self.ticketbox_list_clicker()
-                    if clicker_response is None:
+                    ticket_response = await self.ticketbox_list_clicker()
+                    if ticket_response is None:
                         return "ERROR"
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {clicker_response}")
-                    
-                    cdkeys = clicker_response.get("cdkeys", [])
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {ticket_response}")
+
+                    cdkeys = ticket_response.get("cdkeys", [])
                     if len(cdkeys) == 0:
                         logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
                         return "ERROR"
@@ -5564,12 +5566,12 @@ class GaeaDailyTask:
                         await asyncio.sleep(delay)
                 elif task == '2':  # ticketchoice
                     # -------------------------------------------------------------------------- ticketbox_list
-                    clicker_response = await self.ticketbox_list_clicker()
-                    if clicker_response is None:
+                    ticket_response = await self.ticketbox_list_clicker()
+                    if ticket_response is None:
                         return "ERROR"
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {clicker_response}")
-                    
-                    cdkeys = clicker_response.get("cdkeys", [])
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {ticket_response}")
+
+                    cdkeys = ticket_response.get("cdkeys", [])
                     if len(cdkeys) == 0:
                         logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
                         return "ERROR"
