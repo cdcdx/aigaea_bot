@@ -3288,7 +3288,7 @@ class GaeaDailyTask:
 
             #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction was send successfully! - sxp: {sender_sxp}")
             
-            return 0
+            return sender_usdc
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling_clicker except: {error}")
             return 0
@@ -4881,9 +4881,10 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling response: {clicker_response}")
 
-            delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # funds_pooling
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling delay: {delay} seconds")
-            await asyncio.sleep(delay)
+            if clicker_response>0:
+                delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # funds_pooling
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling delay: {delay} seconds")
+                await asyncio.sleep(delay)
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_fundspooling except: {error}")
