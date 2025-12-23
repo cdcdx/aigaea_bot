@@ -95,20 +95,31 @@ class GaeaDailyTask:
             # "gas": 20000000,  # 最大 Gas 用量
         }
 
-    # 发送交易（重试3次，每次2秒）
+    # send transaction
     def send_transaction_with_retry(self, web3_obj, transaction, web3_prikey, max_retries=3, retry_interval=3):
-        attempt = 0
-        initial_base_fee = None
-        initial_priority_fee = None
+        """
+        发送以太坊交易，带重试机制
         
+        Args:
+            web3_obj: Web3实例
+            transaction: 交易对象
+            web3_prikey: 私钥
+            max_retries: 最大重试次数
+            retry_interval: 重试间隔时间
+        """
         # 设置合理的费用上限，避免过高费用
         MAX_BASE_FEE = web3_obj.to_wei(20, 'gwei')  # 最高基础费用
         MAX_PRIORITY_FEE = web3_obj.to_wei(2, 'gwei')  # 最高优先费用
         
         # 初始gas限制和增长策略
         default_gas_limit = 200000
-        gas_limit = default_gas_limit
         gas_increase_factor = 1.3  # gas限制增长因子
+        
+        # 为避免在循环中重复定义，将一些变量在循环外定义
+        attempt = 0
+        initial_base_fee = None
+        initial_priority_fee = None
+        tx_bytes = None
         
         while attempt < max_retries:
             try:
@@ -155,6 +166,7 @@ class GaeaDailyTask:
                 logger.debug(f"update transaction fees: maxFee={max_fee}, priorityFee={priority_fee}")
                 
                 # 估算 Gas
+                gas_limit = default_gas_limit  # 默认值
                 try:
                     estimated_gas = web3_obj.eth.estimate_gas(transaction)
                     # 增加合理的gas限制缓冲，随着重试次数增加而增加
@@ -198,57 +210,58 @@ class GaeaDailyTask:
                 # 使用私钥签名交易
                 signed_transaction = web3_obj.eth.account.sign_transaction(transaction, web3_prikey)
                 logger.debug(f"signed_transaction: {signed_transaction}")
+
                 # 发送交易
+                tx_hash = web3_obj.eth.send_raw_transaction(signed_transaction.raw_transaction)
+                logger.debug(f"Transaction sent - tx_hash: {tx_hash.hex()}")
+                tx_bytes = f"0x{tx_hash.hex()}"
+                
+                # 等待交易完成
                 try:
-                    # 发送交易
-                    if str(signed_transaction).find("raw_transaction") > 0:
-                        tx_hash = web3_obj.eth.send_raw_transaction(signed_transaction.raw_transaction)
-                    elif str(signed_transaction).find("signed_transaction") > 0:
-                        tx_hash = web3_obj.eth.send_raw_transaction(signed_transaction.raw_transaction)
-                    logger.debug(f"Transaction sent - tx_hash: {tx_hash.hex()}")
-                    # 等待交易完成
-                    # receipt = web3_obj.eth.wait_for_transaction_receipt(tx_hash)
-                    try:
-                        receipt_timeout = 30 if attempt == 0 else 15
-                        receipt = web3_obj.eth.wait_for_transaction_receipt(tx_hash, timeout=receipt_timeout)
-                    except Exception as e:
-                        logger.error(f"Transaction not included in chain after {receipt_timeout} seconds: {str(e)}")
-                        return False, {"tx_hash": f"0x{tx_hash.hex()}", "msg": f"Transaction not included in chain after {receipt_timeout} seconds"}
-                    logger.debug(f"Waiting to complete - receipt: {receipt}")
-                    tx_bytes = f"0x{tx_hash.hex()}"
+                    receipt_timeout = 30 if attempt == 0 else 15
+                    receipt = web3_obj.eth.wait_for_transaction_receipt(tx_hash, timeout=receipt_timeout)
+                except Exception as e:
+                    logger.error(f"Transaction not included in chain after {receipt_timeout} seconds: {str(e)}")
+                    return False, {"tx_hash": tx_bytes, "msg": f"Transaction not included in chain after {receipt_timeout} seconds"}
+                
+                logger.debug(f"Waiting to complete - receipt: {receipt}")
+                tx_bytes = f"0x{tx_hash.hex()}"
                     
-                    if receipt['status'] == 1:
-                        logger.success(f"Transaction successful - tx_hash: {tx_bytes}")
-                        return True, {"tx_hash": tx_bytes}
+                if receipt['status'] == 1:
+                    logger.success(f"Transaction successful - tx_hash: {tx_bytes}")
+                    return True, {"tx_hash": tx_bytes}
+                else:
+                    logger.error(f"Transaction failed - tx_hash: {tx_bytes}")
+                    return False, {"tx_hash": tx_bytes}
+                
+            except ValueError as e:
+                logger.warning(f"Failed to transaction ValueError ETH : {str(e)}")
+                # 处理ValueError异常
+                try:
+                    error_message = e.args[0].get('message', '') if isinstance(e.args[0], dict) else str(e)
+                    error_code = e.args[0].get('code', None) if isinstance(e.args[0], dict) else None
+                    
+                    if 'rpc error' in error_message.lower() or 'node error' in error_message.lower():
+                        logger.error(f"RPC node error encountered: {error_message}")
+                        # 返回更明确的错误信息，指示这是RPC节点错误
+                        result = False, {"tx_hash": tx_bytes, "msg": f"RPC node error: {error_message}. Please check node connectivity and logs for more information."}
+                    elif 'intrinsic gas too low' in error_message.lower():
+                        # 如果是gas过低错误，在下次尝试时增加gas
+                        gas_limit = int(gas_limit * gas_increase_factor)
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
+                    elif 'replacement transaction underpriced' in error_message.lower():
+                        # 费用不足错误，下次尝试时增加费用
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
+                    elif 'nonce too low' in error_message.lower():
+                        # nonce错误，更新nonce
+                        transaction['nonce'] = web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
                     else:
-                        logger.error(f"Transaction failed - tx_hash: {tx_bytes}")
-                        return False, {"tx_hash": tx_bytes}
-                except ValueError as e:
-                    logger.warning(f"Failed to transaction ValueError ETH : {str(e)}")
-                    try:
-                        error_message = e.args[0].get('message', '') if isinstance(e.args[0], dict) else str(e)
-                        error_code = e.args[0].get('code', None) if isinstance(e.args[0], dict) else None
-                        
-                        if 'rpc error' in error_message.lower() or 'node error' in error_message.lower():
-                            logger.error(f"RPC node error encountered: {error_message}")
-                            # 返回更明确的错误信息，指示这是RPC节点错误
-                            result = False, {"tx_hash": tx_bytes, "msg": f"RPC node error: {error_message}. Please check node connectivity and logs for more information."}
-                        elif 'intrinsic gas too low' in error_message.lower():
-                            # 如果是gas过低错误，在下次尝试时增加gas
-                            gas_limit = int(gas_limit * gas_increase_factor)
-                            result = False, {"tx_hash": tx_bytes, "msg": error_message}
-                        elif 'replacement transaction underpriced' in error_message.lower():
-                            # 费用不足错误，下次尝试时增加费用
-                            result = False, {"tx_hash": tx_bytes, "msg": error_message}
-                        elif 'nonce too low' in error_message.lower():
-                            # nonce错误，更新nonce
-                            transaction['nonce'] = web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
-                            result = False, {"tx_hash": tx_bytes, "msg": error_message}
-                        else:
-                            result = False, {"tx_hash": tx_bytes, "msg": error_message, "code": error_code}
-                    except Exception as e:
-                        result = False, {"tx_hash": tx_bytes, "msg": str(e)}
-                    return result
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message, "code": error_code}
+                except Exception as e:
+                    result = False, {"tx_hash": tx_bytes, "msg": str(e)}
+                return result
+            
             except Exception as e:
                 error_msg = str(e).lower()
                 if "replacement transaction underpriced" in error_msg:
@@ -298,8 +311,17 @@ class GaeaDailyTask:
                     logger.error(f"Max retries reached. Failed to eth.send_raw_transaction: {str(e)}")
                     return False, {"tx_hash": "send_raw_transaction", "msg": str(e)}
 
-    # 解析 Solidity 合约的 revert 错误信息
+    # revert reason
     def decode_revert_reason(self, hex_error):
+        """
+        解析 Solidity 合约的 revert 错误信息
+        
+        Args:
+            hex_error: 16进制错误信息
+            
+        Returns:
+            str: 解码后的错误信息
+        """
         try:
             # 移除 '0x' 前缀
             if hex_error.startswith('0x'):
