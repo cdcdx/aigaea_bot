@@ -17,7 +17,7 @@ from eth_account.messages import encode_defunct
 from src.gaea_client import GaeaClient
 from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_emotion3, contract_abi_reward, contract_abi_reward3, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award, contract_abi_ticket
 from utils.decorators import helper
-from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
+from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid, get_emotion_for_txt, get_choice_for_txt
 from utils.services import get_captcha_key, generate_random_groups
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, EMOTION3_ONLINE_STAMP, SNAIL_UNIT
 from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_TICKET, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS, POOLING_ADDRESS
@@ -1244,6 +1244,97 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker except: {error}")
+
+    ## 训练抉择信息
+    async def emotionperiod_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- emotionperiod
+            url = GAEA_API.rstrip('/')+'/api/emotion/period'
+            json_data = {
+                "chain_id": 8453
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker url: {url}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker {response}")
+                raise Exception(response)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker except: {error}")
+
+    async def choiceperiod_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- choiceperiod
+            url = GAEA_API.rstrip('/')+'/api/choice/period'
+            json_data = {
+                "chain_id": 8453
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker url: {url}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker {response}")
+                raise Exception(response)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker except: {error}")
 
     # -------------------------------------------------------------------------- 任务
     
@@ -5003,6 +5094,18 @@ class GaeaDailyTask:
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
+                elif emotion == '9':
+                    clicker_response = await self.emotionperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    emotion = get_emotion_for_txt(period_id)
+                    if emotion == '0':
+                        return "ERROR"
+                    os.environ['CHOOSE_EMOTION'] = emotion
                 emotion_detail=emotion+'_1_'+is_godhood_id
                 clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
@@ -5114,6 +5217,18 @@ class GaeaDailyTask:
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
+                elif emotion == '9':
+                    clicker_response = await self.emotionperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    emotion = get_emotion_for_txt(period_id)
+                    if emotion == '0':
+                        return "ERROR"
+                    os.environ['CHOOSE_EMOTION'] = emotion
                 emotion_detail=emotion+'_1_'+is_godhood_id
                 clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
@@ -5182,6 +5297,18 @@ class GaeaDailyTask:
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
+                elif emotion == '9':
+                    clicker_response = await self.emotionperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    emotion = get_emotion_for_txt(period_id)
+                    if emotion == '0':
+                        return "ERROR"
+                    os.environ['CHOOSE_EMOTION'] = emotion
                 emotion_detail=emotion+'_1_'+is_godhood_id
                 clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
@@ -5260,7 +5387,7 @@ class GaeaDailyTask:
                 
                 is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
-                delay = random.randint(60, 90) # godhoodinfo
+                delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
                 choice=os.environ.get('CHOOSE_CHOICE', '0')
@@ -5269,6 +5396,18 @@ class GaeaDailyTask:
                     options = await self.deepchoice_list_clicker()
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice options: {options}")
                     choice = random.choice(options)
+                elif choice == '9':
+                    clicker_response = await self.choiceperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod response: {clicker_response}")
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    choice = get_choice_for_txt(period_id)
+                    if choice == '0':
+                        return "ERROR"
+                    os.environ['CHOOSE_CHOICE'] = choice
                 choice_detail=f"{choice}_{delay}_{is_godhood_id}"
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
                 # -------------------------------------------------------------------------- 5 deepchoice
@@ -5325,7 +5464,7 @@ class GaeaDailyTask:
                 
                 is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
-                delay = random.randint(60, 90) # godhoodinfo
+                delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
                 choice=os.environ.get('CHOOSE_CHOICE', '0')
@@ -5334,6 +5473,18 @@ class GaeaDailyTask:
                     options = await self.deepchoice_list_clicker()
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker options: {options}")
                     choice = random.choice(options)
+                elif choice == '9':
+                    clicker_response = await self.choiceperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod response: {clicker_response}")
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    choice = get_choice_for_txt(period_id)
+                    if choice == '0':
+                        return "ERROR"
+                    os.environ['CHOOSE_CHOICE'] = choice
                 choice_detail=f"{choice}_{delay}_{is_godhood_id}"
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
             
@@ -5444,6 +5595,18 @@ class GaeaDailyTask:
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
+                elif emotion == '9':
+                    clicker_response = await self.emotionperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    emotion = get_emotion_for_txt(period_id)
+                    if emotion == '0':
+                        return "ERROR"
+                    os.environ['CHOOSE_EMOTION'] = emotion
                 emotion_detail=emotion+'_1_'+is_godhood_id
                 clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
@@ -5548,6 +5711,18 @@ class GaeaDailyTask:
                 options = await self.deepchoice_list_clicker()
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice options: {options}")
                 choice = random.choice(options)
+            elif choice == '9':
+                clicker_response = await self.choiceperiod_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod response: {clicker_response}")
+                period_id = int(clicker_response.get('id', 0))
+                if period_id == 0:
+                    return "ERROR"
+                choice = get_choice_for_txt(period_id)
+                if choice == '0':
+                    return "ERROR"
+                os.environ['CHOOSE_CHOICE'] = choice
             choice_detail=f"{choice}_{delay}_{is_godhood_id}"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
             # -------------------------------------------------------------------------- deepchoice

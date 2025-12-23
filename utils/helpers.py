@@ -74,3 +74,67 @@ def set_data_for_userid(name,id,userid):
     with open(file, 'w') as f:
         for line in datas:
             f.write(line + '\n')
+
+def get_emotion_for_txt(period_id):
+    """
+    读取一个period_id对应的值 (每10期为1行)
+    :param period_id:
+    """
+    x_pos = period_id%10 - 1
+    y_pos = period_id//10 + 1
+    # print(f"period_id: {period_id}, x_pos: {x_pos}, y_pos: {y_pos}")
+    
+    file = f'data/deeptrain.txt'
+    if not os.path.exists(file):
+        print(f"ERROR: {file} file does not exist")
+        return 0
+    with open(file, 'r') as f:
+        datas = [line.strip() for line in f.readlines()]
+    
+    # 检查是否超出范围
+    if y_pos >= len(datas):
+        print(f"ERROR: Line {y_pos} is out of range")
+        return 0
+    
+    # 获取指定行
+    target_line = datas[y_pos]
+    line_elements = target_line.split(',')  # 假设是以逗号分隔
+    # 获取指定列
+    if x_pos >= len(line_elements):
+        print(f"ERROR: Column {x_pos} is out of range in line {y_pos}")
+        return 0
+    return line_elements[x_pos]
+
+def get_choice_for_txt(period_id):
+    """
+    读取一个period_id对应的值 (每3期位1纪元,每10纪元为1行)
+    :param period_id:
+    """
+    x_pos = period_id%30 - 1
+    y_pos = period_id//30 + 1
+    # print(f"period_id: {period_id}, x_pos: {x_pos}, y_pos: {y_pos}")
+    
+    file = f'data/deepchoice.txt'
+    if not os.path.exists(file):
+        print(f"ERROR: {file} file does not exist")
+        return 0
+    with open(file, 'r') as f:
+        datas = [line.strip() for line in f.readlines()]
+    
+    # 检查是否超出范围
+    if y_pos >= len(datas):
+        print(f"ERROR: Line {y_pos} is out of range")
+        return 0
+    
+    # 获取指定行
+    target_line = datas[y_pos]
+    line_elements = target_line.split(',')  # 假设是以逗号分隔
+    # 获取指定列
+    if x_pos >= len(line_elements):
+        print(f"ERROR: Column {x_pos} is out of range in line {y_pos}")
+        return 0
+    return line_elements[x_pos]
+
+if __name__ == '__main__':
+    print(get_emotion_for_txt(123))
+    print(get_choice_for_txt(123))
