@@ -955,7 +955,6 @@ class GaeaDailyTask:
                     for i in range(10):
                         cdkeys.append(datas[i]['cdkey'])
                 else:
-                    # cdkeys.append(datas[0]['cdkey'])
                     for i in range(total):
                         cdkeys.append(datas[i]['cdkey'])
                 return {'cdkeys': cdkeys}
