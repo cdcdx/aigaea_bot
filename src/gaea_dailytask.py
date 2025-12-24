@@ -5244,7 +5244,15 @@ class GaeaDailyTask:
             if clicker_response is False:
                 # -------------------------------------------------------------------------- 5 deeptrain
                 await self.deeptrain_clicker(emotion, eth_address)
-
+                
+                delay = random.randint(60, 90) # deeptrain
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 deeptrain delay: {delay} seconds")
+                # -------------------------------------------------------------------------- traincheckin
+                clicker_response = await self.traincheckin_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin response: {clicker_response}")
+                
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deeptrain except: {error}")
@@ -5341,9 +5349,15 @@ class GaeaDailyTask:
                 if clicker_response is None:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tickettrain response: {clicker_response}")
-            
+
                 delay = random.randint(60, 90) # ticket_deeptrain
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain delay: {delay} seconds")
+                # -------------------------------------------------------------------------- traincheckin
+                clicker_response = await self.traincheckin_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin response: {clicker_response}")
+                
                 await asyncio.sleep(delay)
             return "SUCCESS"
         except Exception as error:
@@ -5567,6 +5581,9 @@ class GaeaDailyTask:
                 await asyncio.sleep(delay)
 
 
+            task=os.environ.get('TASK_EMOTION', '0')
+            if task == '0':  # no aitrain
+                return "SUCCESS"
             # -------------------------------------------------------------------------- ailist aitrain
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
@@ -5624,9 +5641,9 @@ class GaeaDailyTask:
             clicker_response = await self.is_deeptrain_clicker(eth_address)
             if clicker_response is False:
                 task=os.environ.get('TASK_EMOTION', '0')
-                if task == '0':  # no train
+                if task == '1':  # no train
                     return "SUCCESS"
-                elif task == '1':  # deeptrain
+                elif task == '2':  # deeptrain
                     # -------------------------------------------------------------------------- 4 deeptrain
                     if len(self.client.prikey) in [64,66]:
                         await self.deeptrain_clicker(emotion, eth_address)
@@ -5634,7 +5651,7 @@ class GaeaDailyTask:
                         delay = random.randint(60, 90) # deeptrain
                         logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deeptrain delay: {delay} seconds")
                         await asyncio.sleep(delay)
-                elif task == '2':  # tickettrain
+                elif task == '3':  # tickettrain
                     # -------------------------------------------------------------------------- ticketbox_list
                     ticket_response = await self.ticketbox_list_clicker()
                     if ticket_response is None:
@@ -5728,7 +5745,7 @@ class GaeaDailyTask:
             clicker_response = await self.is_deepchoice_clicker(eth_address)
             if clicker_response is False:
                 task=os.environ.get('TASK_CHOICE', '0')
-                if task == '0':  # no train
+                if task == '0':  # no choice
                     return "SUCCESS"
                 elif task == '1':  # deepchoice
                     # -------------------------------------------------------------------------- 4 deepchoice

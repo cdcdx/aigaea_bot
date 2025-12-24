@@ -161,17 +161,18 @@ def choose_emotion():
     return emotion_int
 
 def choose_task_emotion():
-    task_choice = select(
+    task_emotion = select(
         'Choose Task',
         choices=[
-            Choice("No Train",     '0', shortcut_key="0"),
-            Choice("DeepTrain",    '1', shortcut_key="1"),
-            Choice("TicketTrain",  '2', shortcut_key="2"),
+            Choice("No AI",        '0', shortcut_key="0"),
+            Choice("No Train",     '1', shortcut_key="1"),
+            Choice("DeepTrain",    '2', shortcut_key="2"),
+            Choice("TicketTrain",  '3', shortcut_key="3"),
         ],
         use_shortcuts=True,
         use_arrow_keys=True,
     ).ask()
-    return task_choice
+    return task_emotion
 
 def choose_choice():
     choice_int = select(
@@ -206,10 +207,11 @@ def choose_ticket_level():
     task_ticket_level = select(
         'Choose Ticket',
         choices=[
-            Choice("No ticket", '0', shortcut_key="0"),
+            Choice("No ticket",          '0', shortcut_key="0"),
             Choice("Level 1 - 1.99 U",   '1', shortcut_key="1"),
             Choice("Level 2 - 19.9 U",   '2', shortcut_key="2"),
             Choice("Level 3 - 69.9 U",   '3', shortcut_key="3"),
+            Choice("Level 4 - 0.4 U",    '4', shortcut_key="4"),
             # Choice("Level 3 - 39.9 U",   '3', shortcut_key="3"),
             # Choice("Level 4 - 99.9 U",   '4', shortcut_key="4"),
         ],
