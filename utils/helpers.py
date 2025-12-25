@@ -81,7 +81,7 @@ def get_emotion_for_txt(period_id):
     :param period_id:
     """
     x_pos = period_id%10 - 1
-    y_pos = period_id//10 + 1
+    y_pos = period_id//10
     # print(f"period_id: {period_id}, x_pos: {x_pos}, y_pos: {y_pos}")
     
     file = f'data/deeptrain.txt'
@@ -99,6 +99,7 @@ def get_emotion_for_txt(period_id):
     # 获取指定行
     target_line = datas[y_pos]
     line_elements = target_line.split(',')  # 假设是以逗号分隔
+    # print(f"line_elements: {line_elements}")
     # 获取指定列
     if x_pos >= len(line_elements):
         print(f"ERROR: Column {x_pos} is out of range in line {y_pos}")
@@ -111,7 +112,7 @@ def get_choice_for_txt(period_id):
     :param period_id:
     """
     x_pos = period_id%30 - 1
-    y_pos = period_id//30 + 1
+    y_pos = period_id//30
     # print(f"period_id: {period_id}, x_pos: {x_pos}, y_pos: {y_pos}")
     
     file = f'data/deepchoice.txt'
@@ -129,6 +130,7 @@ def get_choice_for_txt(period_id):
     # 获取指定行
     target_line = datas[y_pos]
     line_elements = target_line.split(',')  # 假设是以逗号分隔
+    # print(f"line_elements: {line_elements}")
     # 获取指定列
     if x_pos >= len(line_elements):
         print(f"ERROR: Column {x_pos} is out of range in line {y_pos}")
@@ -136,5 +138,9 @@ def get_choice_for_txt(period_id):
     return line_elements[x_pos]
 
 if __name__ == '__main__':
-    print(get_emotion_for_txt(123))
-    print(get_choice_for_txt(123))
+    print("emotion:"+get_emotion_for_txt(11))
+    print("emotion:"+get_emotion_for_txt(12))
+    print("emotion:"+get_emotion_for_txt(13))
+    print("choice:"+get_choice_for_txt(121))
+    print("choice:"+get_choice_for_txt(122))
+    print("choice:"+get_choice_for_txt(123))
