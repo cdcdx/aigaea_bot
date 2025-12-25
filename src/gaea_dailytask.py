@@ -1803,7 +1803,7 @@ class GaeaDailyTask:
                     logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
                 
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction was send successfully! - transaction: {transaction}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
@@ -1829,7 +1829,7 @@ class GaeaDailyTask:
                     return "ERROR"
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion response: {clicker_response}")
             
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The inviter transaction was send successfully! - transaction: {transaction}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The inviter transaction send successfully! - transaction: {transaction}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_buy_clicker except: {error}")
@@ -2024,7 +2024,7 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
 
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claimrewards transaction was send successfully! - reward_usdc: {reward_usdc}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claimrewards transaction send successfully! - reward_usdc: {reward_usdc}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodclaimed_clicker except: {error}")
@@ -2147,7 +2147,7 @@ class GaeaDailyTask:
                     logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
                 
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction was send successfully! - transaction: {transaction}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
@@ -2163,7 +2163,7 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The buyTickets transaction was send successfully! - tick_level: {tick_level} tick_rebate: {tick_rebate}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The buyTickets transaction send successfully! - tick_level: {tick_level} tick_rebate: {tick_rebate}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker except: {error}")
@@ -2347,7 +2347,7 @@ class GaeaDailyTask:
                     logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
                 
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction was send successfully! - transaction: {transaction}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
@@ -2368,7 +2368,7 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             
-            logger.info(f"The emotions transaction was send successfully! - transaction: {transaction}")
+            logger.info(f"The emotions transaction send successfully! - transaction: {transaction}")
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Deeptrain successfully! - emotion: {emotion_int}")
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker except: {error}")
@@ -2509,7 +2509,7 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claim transaction was send successfully! - reward_usdc: {reward_usdc}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claim transaction send successfully! - reward_usdc: {reward_usdc}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionclaimed_clicker except: {error}")
@@ -2688,7 +2688,7 @@ class GaeaDailyTask:
                     logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
 
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction was send successfully! - transaction: {transaction}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
@@ -2704,7 +2704,7 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
 
-            logger.info(f"The choices transaction was send successfully! - transaction: {transaction}")
+            logger.info(f"The choices transaction send successfully! - transaction: {transaction}")
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Deepchoice successfully! - choice: {choice_int}")
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker except: {error}")
@@ -2837,7 +2837,7 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
 
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claim transaction was send successfully! - award_usdc: {award_usdc}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claim transaction send successfully! - award_usdc: {award_usdc}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceclaimed_clicker except: {error}")
@@ -2970,7 +2970,7 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
 
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The { 'mintNFT' if snftmint_id==0 else 'upgradeNFT' } transaction was send successfully! - snftmint_id: {snftmint_id} nft_level: {nft_level}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The { 'mintNFT' if snftmint_id==0 else 'upgradeNFT' } transaction send successfully! - snftmint_id: {snftmint_id} nft_level: {nft_level}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftmint_clicker except: {error}")
@@ -3190,7 +3190,7 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
 
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The { 'mintNFT' if anftmint_id==0 else 'upgradeNFT' } transaction was send successfully! - anftmint_id: {anftmint_id} nft_ticket: {nft_ticket}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The { 'mintNFT' if anftmint_id==0 else 'upgradeNFT' } transaction send successfully! - anftmint_id: {anftmint_id} nft_ticket: {nft_ticket}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker except: {error}")
@@ -3356,7 +3356,7 @@ class GaeaDailyTask:
                     logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
 
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction was send successfully! - usdc: {sender_usdc}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction send successfully! - usdc: {sender_usdc}")
             
             # # SXP账户余额
             # sender_balance_sxp = sxp_contract.functions.balanceOf(sender_address).call()
@@ -3378,7 +3378,7 @@ class GaeaDailyTask:
             #         logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
             #         raise Exception("Failed to send_transaction.")
 
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction was send successfully! - sxp: {sender_sxp}")
+            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction send successfully! - sxp: {sender_sxp}")
             
             return sender_usdc
         except Exception as error:
