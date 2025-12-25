@@ -12,6 +12,22 @@ from jose import jwt
 
 from utils.helpers import set_data_for_token
 
+def getheaders():
+    return {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept-Language": "en,zh-CN;q=0.9,zh;q=0.8,en-US;q=0.7",
+        "Connection": "keep-alive",
+        "Content-Type": "application/json",
+        "Origin": "https://app.gaea.la",
+        "Referer": "https://app.gaea.la/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 12; K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/95.0.4638.74 Safari/537.36",
+        "X-Requested-With": "org.telegram.messenger.web",
+    }
+
 class GaeaClient:
     def __init__(self, runname: str, id: str, userid: str, email: str, passwd:str, prikey: str, token: str, proxy: str) -> None:
         self.runname = runname
@@ -153,22 +169,6 @@ class GaeaClient:
                 else:
                     return f"ERROR: {error}"
                     raise Exception(error)
-
-def getheaders():
-    return {
-        "Accept": "application/json",
-        "Accept-Encoding": "gzip, deflate",
-        "Accept-Language": "en,zh-CN;q=0.9,zh;q=0.8,en-US;q=0.7",
-        "Connection": "keep-alive",
-        "Content-Type": "application/json",
-        "Origin": "https://app.gaea.la",
-        "Referer": "https://app.gaea.la/",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-site",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 12; K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/95.0.4638.74 Safari/537.36",
-        "X-Requested-With": "org.telegram.messenger.web",
-    }
 
 async def make_request(method:str = 'GET', url:str = None, headers:dict = None, params: dict = None, data:str = None, json:dict = None, module_name: str = 'Request'):
     errors = None
