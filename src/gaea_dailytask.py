@@ -1691,7 +1691,7 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn_clicker except: {error}")
 
-    async def visionclaimed_clicker(self) -> None:
+    async def visionclaim_clicker(self) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -1704,16 +1704,16 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- visionclaim
             url = GAEA_API.rstrip('/')+f'/api/vision/claimed'
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker url: {url}")
             response = await self.client.make_request(
                 method='GET', 
                 url=url, 
                 headers=headers
             )
             if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker {response}")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker {response}")
                 raise Exception(response)
-            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1724,13 +1724,13 @@ class GaeaDailyTask:
                 if message is None:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker => {message}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker => {message}")
                     return message
                 else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker ERROR: {message}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker except: {error}")
 
     # -------------------------------------------------------------------------- 上链
     
@@ -2492,7 +2492,7 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(reward_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            if reward_usdc == 0: # 
+            if reward_usdc < 5.0: # 余额大于5USDC再提现
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
@@ -2820,7 +2820,7 @@ class GaeaDailyTask:
             award_usdc = web3_obj.from_wei(award_sender_usdc, 'mwei')
             logger.debug(f"award_usdc: {award_usdc}")
 
-            if award_usdc == 0: # 
+            if award_usdc < 5.0: # 余额大于5USDC再提现
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
@@ -4921,14 +4921,14 @@ class GaeaDailyTask:
             for vision in clicker_response:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} vision: {vision}")
                 vision_id = int(vision['id'])
-                # -------------------------------------------------------------------------- visionclaimed
-                clicker_response = await self.visionclaimed_clicker()
+                # -------------------------------------------------------------------------- visionclaim
+                clicker_response = await self.visionclaim_clicker()
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed response: {clicker_response} - vision_id: {vision_id}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim response: {clicker_response} - vision_id: {vision_id}")
 
-                delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # visionclaimed
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed delay: {delay} seconds")
+                delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # visionclaim
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim delay: {delay} seconds")
                 await asyncio.sleep(delay)
             
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Vision claimed completed")
