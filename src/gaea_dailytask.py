@@ -5094,13 +5094,16 @@ class GaeaDailyTask:
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
                 elif emotion == '9':
+                    # -------------------------------------------------------------------------- emotionperiod
                     clicker_response = await self.emotionperiod_clicker()
                     if clicker_response is None:
                         return "ERROR"
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    
                     period_id = int(clicker_response.get('id', 0))
                     if period_id == 0:
                         return "ERROR"
+                    
                     emotion = get_emotion_for_txt(period_id)
                     if emotion == '0':
                         return "ERROR"
@@ -5217,13 +5220,16 @@ class GaeaDailyTask:
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
                 elif emotion == '9':
+                    # -------------------------------------------------------------------------- emotionperiod
                     clicker_response = await self.emotionperiod_clicker()
                     if clicker_response is None:
                         return "ERROR"
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    
                     period_id = int(clicker_response.get('id', 0))
                     if period_id == 0:
                         return "ERROR"
+                    
                     emotion = get_emotion_for_txt(period_id)
                     if emotion == '0':
                         return "ERROR"
@@ -5305,13 +5311,16 @@ class GaeaDailyTask:
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
                 elif emotion == '9':
+                    # -------------------------------------------------------------------------- emotionperiod
                     clicker_response = await self.emotionperiod_clicker()
                     if clicker_response is None:
                         return "ERROR"
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    
                     period_id = int(clicker_response.get('id', 0))
                     if period_id == 0:
                         return "ERROR"
+                    
                     emotion = get_emotion_for_txt(period_id)
                     if emotion == '0':
                         return "ERROR"
@@ -5410,13 +5419,16 @@ class GaeaDailyTask:
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice options: {options}")
                     choice = random.choice(options)
                 elif choice == '9':
+                    # -------------------------------------------------------------------------- choiceperiod
                     clicker_response = await self.choiceperiod_clicker()
                     if clicker_response is None:
                         return "ERROR"
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod response: {clicker_response}")
+                    
                     period_id = int(clicker_response.get('id', 0))
                     if period_id == 0:
                         return "ERROR"
+                    
                     choice = get_choice_for_txt(period_id)
                     if choice == '0':
                         return "ERROR"
@@ -5487,13 +5499,16 @@ class GaeaDailyTask:
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker options: {options}")
                     choice = random.choice(options)
                 elif choice == '9':
+                    # -------------------------------------------------------------------------- choiceperiod
                     clicker_response = await self.choiceperiod_clicker()
                     if clicker_response is None:
                         return "ERROR"
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod response: {clicker_response}")
+                    
                     period_id = int(clicker_response.get('id', 0))
                     if period_id == 0:
                         return "ERROR"
+                    
                     choice = get_choice_for_txt(period_id)
                     if choice == '0':
                         return "ERROR"
@@ -5612,17 +5627,20 @@ class GaeaDailyTask:
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
                 elif emotion == '9':
+                    # -------------------------------------------------------------------------- emotionperiod
                     clicker_response = await self.emotionperiod_clicker()
                     if clicker_response is None:
                         return "ERROR"
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    
                     period_id = int(clicker_response.get('id', 0))
                     if period_id == 0:
                         return "ERROR"
+                    
                     emotion = get_emotion_for_txt(period_id)
                     if emotion == '0':
                         return "ERROR"
-                    os.environ['CHOOSE_EMOTION'] = emotion
+                    # os.environ['CHOOSE_EMOTION'] = emotion
                 emotion_detail=emotion+'_1_'+is_godhood_id
                 clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
@@ -5728,17 +5746,20 @@ class GaeaDailyTask:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice options: {options}")
                 choice = random.choice(options)
             elif choice == '9':
+                # -------------------------------------------------------------------------- choiceperiod
                 clicker_response = await self.choiceperiod_clicker()
                 if clicker_response is None:
                     return "ERROR"
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod response: {clicker_response}")
+                
                 period_id = int(clicker_response.get('id', 0))
                 if period_id == 0:
                     return "ERROR"
+                
                 choice = get_choice_for_txt(period_id)
                 if choice == '0':
                     return "ERROR"
-                os.environ['CHOOSE_CHOICE'] = choice
+                # os.environ['CHOOSE_CHOICE'] = choice
             choice_detail=f"{choice}_{delay}_{is_godhood_id}"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
             # -------------------------------------------------------------------------- deepchoice
