@@ -5253,6 +5253,7 @@ class GaeaDailyTask:
                 
                 delay = random.randint(60, 90) # deeptrain
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 deeptrain delay: {delay} seconds")
+                await asyncio.sleep(delay)
                 # -------------------------------------------------------------------------- traincheckin
                 clicker_response = await self.traincheckin_clicker()
                 if clicker_response is None:
@@ -5361,6 +5362,7 @@ class GaeaDailyTask:
 
                 delay = random.randint(60, 90) # ticket_deeptrain
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain delay: {delay} seconds")
+                await asyncio.sleep(delay)
                 # -------------------------------------------------------------------------- traincheckin
                 clicker_response = await self.traincheckin_clicker()
                 if clicker_response is None:
