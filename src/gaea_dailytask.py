@@ -17,7 +17,7 @@ from eth_account.messages import encode_defunct
 from src.gaea_client import GaeaClient
 from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_emotion3, contract_abi_reward, contract_abi_reward3, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award, contract_abi_ticket
 from utils.decorators import helper
-from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid
+from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid, get_emotion_for_txt, get_choice_for_txt
 from utils.services import get_captcha_key, generate_random_groups
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, EMOTION3_ONLINE_STAMP, SNAIL_UNIT
 from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_TICKET, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT, CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS, POOLING_ADDRESS
@@ -42,9 +42,295 @@ def connect_web3_rpc():
             raise Exception("Failed to eth.is_connected.")
     return web3_obj
 
+class TransactionHelper:
+    """
+    以太坊交易辅助类，提供交易构建、发送和重试机制
+    """
+    
+    def __init__(self, web3_obj, max_base_fee_gwei=20, max_priority_fee_gwei=2, default_gas_limit=200000):
+        self.web3_obj = web3_obj
+        self.max_base_fee = web3_obj.to_wei(max_base_fee_gwei, 'gwei')
+        self.max_priority_fee = web3_obj.to_wei(max_priority_fee_gwei, 'gwei')
+        self.default_gas_limit = default_gas_limit
+        self.gas_increase_factor = 1.3
+
+    def build_base_transaction(self, sender_address, config_chainid):
+        """
+        构建基础交易参数
+        """
+        latest_block = self.web3_obj.eth.get_block('latest')
+        base_fee = latest_block['baseFeePerGas']
+        priority_fee = self.web3_obj.eth.max_priority_fee
+        priority_fee = int(priority_fee * 1.5)  # 增加50%的缓冲
+        max_fee = int(base_fee * 1.5) + priority_fee   # 增加50%的缓冲
+        
+        # 确保 max_fee >= priority_fee
+        max_fee = max(max_fee, priority_fee)
+        
+        logger.debug(f"baseFeePerGas: {base_fee} wei")
+        logger.debug(f"maxPriorityFeePerGas: {priority_fee} wei")
+        logger.debug(f"maxFeePerGas: {max_fee} wei")
+        
+        return {
+            "chainId": config_chainid,
+            "from": sender_address,
+            "nonce": self.web3_obj.eth.get_transaction_count(sender_address, 'pending'),
+            "maxFeePerGas": max_fee,
+            "maxPriorityFeePerGas": priority_fee,
+        }
+
+    def decode_revert_reason(self, hex_error):
+        """
+        解析 Solidity 合约的 revert 错误信息
+        
+        Args:
+            hex_error: 16进制错误信息
+            
+        Returns:
+            str: 解码后的错误信息
+        """
+        try:
+            # 移除 '0x' 前缀
+            if hex_error.startswith('0x'):
+                hex_error = hex_error[2:]
+            # 检查是否是标准的 Error(string) 选择器
+            if hex_error.startswith('08c379a0'):
+                # 跳过选择器 (4 bytes = 8 hex chars)
+                data = hex_error[8:]
+                
+                # 获取字符串长度 (offset 32 bytes = 64 hex chars)
+                length_hex = data[64:128]
+                length = int(length_hex, 16)
+                
+                # 获取实际的错误消息 (从 128 hex chars 开始)
+                message_hex = data[128:128 + length*2]
+                message = bytes.fromhex(message_hex).decode('utf-8')
+                
+                return message
+            else:
+                return hex_error
+        except Exception as e:
+            return f"Unable to resolve: {str(e)}"
+
+    def _adjust_gas_by_error_type(self, attempt, max_retries, gas_limit, error_str):
+        """
+        根据错误类型调整gas策略
+        """
+        if attempt == 0:
+            # 第一次尝试失败时使用默认gas值
+            return self.default_gas_limit
+        elif "intrinsic gas too low" in error_str or "out of gas" in error_str:
+            # 如果是gas不足相关错误，增加gas限制
+            return int(gas_limit * self.gas_increase_factor)
+        elif "replacement transaction underpriced" in error_str:
+            # 如果是费用不足，增加费用但保持gas不变
+            return min(int(gas_limit * 1.15), self.default_gas_limit*2)
+        elif "nonce too low" in error_str:
+            # nonce错误时保持gas不变
+            return gas_limit
+        elif attempt < max_retries - 1:
+            # 其他错误情况下适度增加gas并继续尝试
+            return int(gas_limit * 1.25)
+        else:
+            # 最后一次尝试仍然失败则返回原值
+            return gas_limit
+
+    def send_transaction_with_retry(self, transaction, web3_prikey, max_retries=3, retry_interval=3):
+        """
+        发送以太坊交易，带重试机制
+        
+        Args:
+            transaction: 交易对象
+            web3_prikey: 私钥
+            max_retries: 最大重试次数
+            retry_interval: 重试间隔时间
+        """
+        # 为避免在循环中重复定义，将一些变量在循环外定义
+        attempt = 0
+        initial_base_fee = None
+        initial_priority_fee = None
+        tx_bytes = None
+        
+        while attempt < max_retries:
+            try:
+                logger.debug(f"transaction: {transaction}")
+                
+                # 动态更新 Gas 参数
+                latest_block = self.web3_obj.eth.get_block('latest')
+                base_fee = latest_block['baseFeePerGas']
+                current_priority_fee = self.web3_obj.eth.max_priority_fee
+                
+                # 记录初始费用用于比较
+                if attempt == 0:
+                    initial_base_fee = base_fee
+                    initial_priority_fee = current_priority_fee
+                
+                # 根据尝试次数调整费用
+                if attempt > 0:
+                    # 费用增长策略: 每次尝试增加15%费用，但不超过上限
+                    fee_multiplier = 1.15 ** attempt
+                    priority_fee = min(
+                        int(initial_priority_fee * fee_multiplier), 
+                        self.max_priority_fee
+                    )
+                    # 更新nonce
+                    transaction['nonce'] = self.web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
+                else:
+                    # 初始交易使用保守的费用
+                    priority_fee = min(int(current_priority_fee * 1.1), self.max_priority_fee)
+                    
+                # 计算最大费用
+                max_fee = min(
+                    int(base_fee * 1.1) + priority_fee,
+                    self.max_base_fee
+                )
+                
+                # 确保 max_fee >= priority_fee
+                max_fee = max(max_fee, priority_fee)
+                
+                # 更新交易参数
+                transaction.update({
+                    "maxFeePerGas": max_fee,
+                    "maxPriorityFeePerGas": priority_fee,
+                })
+                logger.debug(f"update transaction fees: maxFee={max_fee}, priorityFee={priority_fee}")
+                
+                # 估算 Gas
+                gas_limit = self.default_gas_limit  # 默认值
+                try:
+                    estimated_gas = self.web3_obj.eth.estimate_gas(transaction)
+                    # 增加合理的gas限制缓冲，随着重试次数增加而增加
+                    buffer_multiplier = min(1.0 + (0.1 * attempt), self.gas_increase_factor)  # 最多1.3倍缓冲
+                    gas_limit = int(estimated_gas * buffer_multiplier)
+                    if gas_limit < 100000:
+                        gas_limit = 100000
+                except Exception as e:
+                    logger.error(f"Failed to eth.estimate_gas: {str(e)}")
+                    decoded_error = self.decode_revert_reason(str(e)) if '0x' in str(e) else str(e)
+                    
+                    # 根据错误类型调整gas策略
+                    error_str = str(e).lower()
+                    gas_limit = self._adjust_gas_by_error_type(attempt, max_retries, gas_limit, error_str)
+                    
+                    if attempt >= max_retries - 1:
+                        # 最后一次尝试仍然失败则返回错误
+                        return False, {"tx_hash": "eth.estimate_gas", "msg": decoded_error}
+                    else:
+                        logger.warning(f"Adjusting gas limit to: {gas_limit}")
+                
+                logger.debug(f"gas_limit: {gas_limit}")
+                transaction["gas"] = gas_limit
+                logger.debug(f"update transaction with gas: {transaction}")
+                
+                # 使用私钥签名交易
+                signed_transaction = self.web3_obj.eth.account.sign_transaction(transaction, web3_prikey)
+                logger.debug(f"signed_transaction: {signed_transaction}")
+
+                # 发送交易
+                tx_hash = self.web3_obj.eth.send_raw_transaction(signed_transaction.raw_transaction)
+                logger.debug(f"Transaction sent - tx_hash: {tx_hash.hex()}")
+                tx_bytes = f"0x{tx_hash.hex()}"
+                
+                # 等待交易完成
+                try:
+                    receipt_timeout = 30 if attempt == 0 else 15
+                    receipt = self.web3_obj.eth.wait_for_transaction_receipt(tx_hash, timeout=receipt_timeout)
+                except Exception as e:
+                    logger.error(f"Transaction not included in chain after {receipt_timeout} seconds: {str(e)}")
+                    return False, {"tx_hash": tx_bytes, "msg": f"Transaction not included in chain after {receipt_timeout} seconds"}
+                
+                logger.debug(f"Waiting to complete - receipt: {receipt}")
+                tx_bytes = f"0x{tx_hash.hex()}"
+                    
+                if receipt['status'] == 1:
+                    logger.success(f"Transaction successful - tx_hash: {tx_bytes}")
+                    return True, {"tx_hash": tx_bytes}
+                else:
+                    logger.error(f"Transaction failed - tx_hash: {tx_bytes}")
+                    return False, {"tx_hash": tx_bytes}
+                
+            except ValueError as e:
+                logger.warning(f"Failed to transaction ValueError ETH : {str(e)}")
+                # 处理ValueError异常
+                try:
+                    error_message = e.args[0].get('message', '') if isinstance(e.args[0], dict) else str(e)
+                    error_code = e.args[0].get('code', None) if isinstance(e.args[0], dict) else None
+                    
+                    if 'rpc error' in error_message.lower() or 'node error' in error_message.lower():
+                        logger.error(f"RPC node error encountered: {error_message}")
+                        # 返回更明确的错误信息，指示这是RPC节点错误
+                        result = False, {"tx_hash": tx_bytes, "msg": f"RPC node error: {error_message}. Please check node connectivity and logs for more information."}
+                    elif 'intrinsic gas too low' in error_message.lower():
+                        # 如果是gas过低错误，在下次尝试时增加gas
+                        gas_limit = int(gas_limit * self.gas_increase_factor)
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
+                    elif 'replacement transaction underpriced' in error_message.lower():
+                        # 费用不足错误，下次尝试时增加费用
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
+                    elif 'nonce too low' in error_message.lower():
+                        # nonce错误，更新nonce
+                        transaction['nonce'] = self.web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message}
+                    else:
+                        result = False, {"tx_hash": tx_bytes, "msg": error_message, "code": error_code}
+                except Exception as e:
+                    result = False, {"tx_hash": tx_bytes, "msg": str(e)}
+                return result
+            
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "replacement transaction underpriced" in error_msg:
+                    logger.warning(f"Priority fee insufficient, will increase... (Try {attempt+1}/{max_retries})")
+                    if attempt + 1 >= max_retries:
+                        logger.error(f"Maximum number of retries: {error_msg}")
+                        return False, {"tx_hash": "", "msg": f"Maximum number of retries: {error_msg}"}
+                elif "max fee per gas" in error_msg:
+                    logger.warning(f"Basic fee insufficient, will increase... (Try {attempt+1}/{max_retries})")
+                elif "nonce too low" in error_msg:
+                    logger.warning(f"Nonce is too low, get the latest nonce... (Try {attempt+1}/{max_retries})")
+                    transaction['nonce'] = self.web3_obj.eth.get_transaction_count(transaction['from'], 'pending')
+                elif "already known" in error_msg:
+                    logger.warning(f"Awaiting confirmation... (Try {attempt+1}/{max_retries})")
+                    # 交易已经在内存池中，我们应该查询它的状态而不是简单等待
+                    try:
+                        # 尝试通过交易哈希获取交易详情
+                        pending_tx = self.web3_obj.eth.get_transaction(signed_transaction.hash)
+                        if pending_tx:
+                            logger.info(f"Found pending transaction: {signed_transaction.hash.hex()}")
+                            # 等待交易确认
+                            try:
+                                receipt = self.web3_obj.eth.wait_for_transaction_receipt(signed_transaction.hash, timeout=30)
+                                if receipt['status'] == 1:
+                                    logger.success(f"Transaction successful - tx_hash: {signed_transaction.hash.hex()}")
+                                    return True, {"tx_hash": signed_transaction.hash.hex()}
+                                else:
+                                    logger.error(f"Transaction failed - tx_hash: {signed_transaction.hash.hex()}")
+                                    return False, {"tx_hash": signed_transaction.hash.hex()}
+                            except Exception as wait_e:
+                                logger.error(f"Pending transaction timeout: {str(wait_e)}")
+                    except Exception as fetch_e:
+                        logger.warning(f"Unable to retrieve pending transactions: {str(fetch_e)}")
+                    
+                    # 交易已经在内存池中，等待确认
+                    time.sleep(retry_interval)
+                    attempt += 1
+                    continue
+                else:
+                    logger.error(f"Failed to send transaction: {e} (Try {attempt+1}/{max_retries})")
+                
+                attempt += 1
+                if attempt < max_retries:
+                    logger.debug(f"Retrying in {retry_interval} seconds...")
+                    time.sleep(retry_interval)
+                else:
+                    logger.error(f"Max retries reached. Failed to eth.send_raw_transaction: {str(e)}")
+                    return False, {"tx_hash": "send_raw_transaction", "msg": str(e)}
+
 class GaeaDailyTask:
     def __init__(self, client: GaeaClient) -> None:
         self.client = client
+        # 创建一个共享的web3实例用于解码错误信息
+        self._web3_instance = connect_web3_rpc()
 
     def getheaders(self):
         return {
@@ -63,70 +349,43 @@ class GaeaDailyTask:
             "X-Requested-With": "org.telegram.messenger.web",
         }
 
-    # Send transaction (retry 5 times, 2 seconds each)
-    def send_transaction_with_retry(self, web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas, max_retries=1, retry_interval=2):
+    # -------------------------------------------------------------------------- web3
+
+    # build base transaction
+    def build_base_transaction(self, web3_obj, sender_address, config_chainid):
         """
-        发送交易
-        :param web3_connection: Web3 连接对象
-        :param transaction: 交易对象
-        :param max_fee_per_gas: 最大每 gas 费用
-        :param priority_fee_per_gas: 优先每 gas 费用
-        :param max_retries: 最大重试次数
-        :param retry_interval: 重试间隔时间
-        :return: 交易结果和交易哈希
+        构建基础交易参数
         """
-        attempt = 0
-        while attempt < max_retries:
-            try:
-                gas_limit = web3_obj.eth.estimate_gas(transaction)
-                logger.debug(f"Estimated GasLimit: {gas_limit} units")
-                total_gas_cost = max_fee_per_gas * gas_limit
-                logger.debug(f"Total Gas Cost: {total_gas_cost} wei / {total_gas_cost / 10 ** 18} ETH")
-                transaction.update({
-                    "gas": gas_limit,
-                    "maxFeePerGas": max_fee_per_gas,
-                    "maxPriorityFeePerGas": priority_fee_per_gas,
-                })
-                logger.debug(f"update transaction: {transaction}")
-                signed_transaction = web3_obj.eth.account.sign_transaction(transaction, self.client.prikey)
-                logger.debug(f"signed_transaction: {signed_transaction}")
-                try:
-                    # Sending transactions
-                    if str(signed_transaction).find("raw_transaction") > 0:
-                        tx_hash = web3_obj.eth.send_raw_transaction(signed_transaction.raw_transaction)
-                    elif str(signed_transaction).find("signed_transaction") > 0:
-                        tx_hash = web3_obj.eth.send_raw_transaction(signed_transaction.raw_transaction)
-                    logger.debug(f"Send transaction, hash: {tx_hash.hex()}")
-                    # Waiting for the transaction to complete
-                    receipt = web3_obj.eth.wait_for_transaction_receipt(tx_hash)
-                    logger.debug(f"Waiting for completion, receipt: {receipt}")
-                    tx_bytes = f"0x{tx_hash.hex()}"
-                    
-                    if receipt["status"] == 1:
-                        logger.info(f"Transaction successful, hash: {tx_bytes}")
-                        return True, {"tx_hash": tx_bytes}
-                    else:
-                        logger.error(f"Transaction failed, hash: {tx_bytes}")
-                        return False, {"tx_hash": tx_bytes}
-                except ValueError as e:
-                    logger.info(f"Failed to transfer ValueError ETH : {str(e)}")
-                    try:
-                        if e.args[0].get('message') in 'intrinsic gas too low':
-                            result = False, {"tx_hash": tx_bytes, "msg": e.args[0].get('message')}
-                        else:
-                            result = False, {"tx_hash": tx_bytes, "msg": e.args[0].get('message'), "code": e.args[0].get('code')}
-                    except Exception as e:
-                        result = False, {"tx_hash": tx_bytes, "msg": str(e)}
-                    return result
-            except Exception as e:
-                logger.error(f"Attempt {attempt + 1} failed: {e}")
-                attempt += 1
-                if attempt < max_retries:
-                    logger.debug(f"Retrying in {retry_interval} seconds...")
-                    time.sleep(retry_interval)
-                else:
-                    logger.error(f"Max retries reached. Failed to eth.estimate_gas: {str(e)}")
-                    return False, {"tx_hash": "estimate_gas", "msg": str(e)}
+        tx_helper = TransactionHelper(web3_obj)
+        return tx_helper.build_base_transaction(sender_address, config_chainid)
+
+    # send transaction
+    def send_transaction_with_retry(self, web3_obj, transaction, web3_prikey, max_retries=3, retry_interval=3):
+        """
+        发送以太坊交易，带重试机制
+        
+        Args:
+            web3_obj: Web3实例
+            transaction: 交易对象
+            web3_prikey: 私钥
+            max_retries: 最大重试次数
+            retry_interval: 重试间隔时间
+        """
+        tx_helper = TransactionHelper(web3_obj)
+        return tx_helper.send_transaction_with_retry(transaction, web3_prikey, max_retries, retry_interval)
+
+    # revert reason
+    def decode_revert_reason(self, hex_error):
+        """
+        解析 Solidity 合约的 revert 错误信息
+        
+        Args:
+            hex_error: 16进制错误信息
+        Returns:
+            str: 解码后的错误信息
+        """
+        tx_helper = TransactionHelper(self._web3_instance)
+        return tx_helper.decode_revert_reason(hex_error)
 
     # -------------------------------------------------------------------------- 接口
 
@@ -184,13 +443,13 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
 
             code = response.get('code', None)
             if code not in [200, 201]:
                 username = self.client.email
             
-            delay = random.randint(5, 10)
+            delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- register
@@ -214,7 +473,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -289,7 +548,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -330,7 +589,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -360,8 +619,10 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
-            # -------------------------------------------------------------------------- address
-            sender_address = Web3().eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- bind_address
             url = GAEA_API.rstrip('/')+'/api/bind/address'
             json_data = {
@@ -379,7 +640,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bind_address_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bind_address_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bind_address_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -420,7 +681,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -461,7 +722,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -502,7 +763,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -543,7 +804,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3info_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -584,7 +845,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -638,7 +899,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -679,7 +940,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -694,7 +955,8 @@ class GaeaDailyTask:
                     for i in range(10):
                         cdkeys.append(datas[i]['cdkey'])
                 else:
-                    cdkeys.append(datas[0]['cdkey'])
+                    for i in range(total):
+                        cdkeys.append(datas[i]['cdkey'])
                 return {'cdkeys': cdkeys}
             else:
                 message = response.get('msg', None)
@@ -734,7 +996,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -784,7 +1046,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -829,7 +1091,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -871,7 +1133,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -890,9 +1152,9 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist_clicker except: {error}")
 
-    async def aitraincheckin_clicker(self, emotion_detail) -> None:
+    async def aitrain_clicker(self, emotion_detail) -> None:
         try:
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker emotion_detail: {emotion_detail}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker emotion_detail: {emotion_detail}")
 
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -908,8 +1170,8 @@ class GaeaDailyTask:
                 "detail": emotion_detail
             }
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker url: {url}")
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker json_data: {json_data}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker json_data: {json_data}")
             response = await self.client.make_request(
                 method='POST', 
                 url=url, 
@@ -917,26 +1179,26 @@ class GaeaDailyTask:
                 json=json_data
             )
             if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker {response}")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
                 if message is None:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker => {message}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker => {message}")
                     return message
                 else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker ERROR: {message}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitraincheckin_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain_clicker except: {error}")
 
     async def traincheckin_clicker(self) -> None:
         try:
@@ -963,7 +1225,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -981,6 +1243,97 @@ class GaeaDailyTask:
                     raise Exception(message)
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin_clicker except: {error}")
+
+    ## 训练抉择信息
+    async def emotionperiod_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- emotionperiod
+            url = GAEA_API.rstrip('/')+'/api/emotion/period'
+            json_data = {
+                "chain_id": 8453
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker url: {url}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker {response}")
+                raise Exception(response)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod_clicker except: {error}")
+
+    async def choiceperiod_clicker(self) -> None:
+        try:
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            # -------------------------------------------------------------------------- choiceperiod
+            url = GAEA_API.rstrip('/')+'/api/choice/period'
+            json_data = {
+                "chain_id": 8453
+            }
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker url: {url}")
+            response = await self.client.make_request(
+                method='POST', 
+                url=url, 
+                headers=headers,
+                json=json_data
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker {response}")
+                raise Exception(response)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker except: {error}")
 
     # -------------------------------------------------------------------------- 任务
     
@@ -1007,7 +1360,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1052,7 +1405,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1098,7 +1451,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1140,7 +1493,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1186,7 +1539,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1227,7 +1580,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneclaim_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneclaim_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneclaim_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1269,7 +1622,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionlist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionlist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionlist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1319,7 +1672,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201, 206]:
@@ -1338,7 +1691,7 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn_clicker except: {error}")
 
-    async def visionclaimed_clicker(self) -> None:
+    async def visionclaim_clicker(self) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -1351,16 +1704,16 @@ class GaeaDailyTask:
             # -------------------------------------------------------------------------- visionclaim
             url = GAEA_API.rstrip('/')+f'/api/vision/claimed'
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker url: {url}")
             response = await self.client.make_request(
                 method='GET', 
                 url=url, 
                 headers=headers
             )
             if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker {response}")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1371,25 +1724,25 @@ class GaeaDailyTask:
                 if message is None:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker => {message}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker => {message}")
                     return message
                 else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker ERROR: {message}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker except: {error}")
 
     # -------------------------------------------------------------------------- 上链
     
     ## 买神格卡
-    async def godhoodid_clicker(self) -> None:
+    async def godhoodid_buy_clicker(self) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_clicker ERROR: Incorrect private key")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_buy_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
             # -------------------------------------------------------------------------- godhoodid
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1438,104 +1791,62 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Insufficient USDC authorization amount for invite_contract.")
                 # raise Exception("Insufficient USDC authorization amount for invite_contract.")
 
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 购卡合约金额授权
-                transaction = usdc_contract.functions.approve(invite_address, inviter_price).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = usdc_contract.functions.approve(invite_address, inviter_price).build_transaction(base_transaction)
                 logger.debug(f"approve transaction: {transaction}")
 
                 # 发送交易
-                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
                 if tx_success == False:
-                    logger.error(f"Ooops! Failed to send_transaction.")
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
                 
-                logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
-            # 构建交易 - 购卡
             referral_addr = random.choice(REFERRAL_ADDRESS)
             referral_address = Web3.to_checksum_address(referral_addr)
             logger.debug(f"referral_address: {referral_address}")
             
-            transaction = invite_contract.functions.inviter( referral_address ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
+            # 构建交易 - 购卡
+            transaction = invite_contract.functions.inviter( referral_address ).build_transaction(base_transaction)
             logger.debug(f"inviter transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # invite.inviter
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             else:
                 # -------------------------------------------------------------------------- godhoodemotion
-                clicker_response = await self.godhoodemotion_clicker()
+                clicker_response = await self.godhoodemotion_clicker(sender_address)
                 if clicker_response is None:
                     return "ERROR"
-                
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion response: {clicker_response}")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion response: {clicker_response}")
             
-            logger.success(f"The inviter transaction was send successfully! - transaction: {transaction}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The inviter transaction send successfully! - transaction: {transaction}")
             return "SUCCESS"
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_buy_clicker except: {error}")
 
-    async def godhoodemotion_clicker(self) -> None:
+    async def godhoodemotion_clicker(self, eth_address) -> None:
         try:
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- godhoodid
-            web3_obj = web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
-
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
 
             # 购卡合约地址
             invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
@@ -1568,7 +1879,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1587,15 +1898,16 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion_clicker except: {error}")
 
-    async def godhoodtransfer_clicker(self) -> None:
+    async def godhoodtransfer_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
-            # -------------------------------------------------------------------------- address
-            sender_address = Web3().eth.account.from_key(self.client.prikey).address
+
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- godhood_transfer
             url = GAEA_API.rstrip('/')+'/api/godhood/transfer'
             json_data = {
@@ -1614,7 +1926,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1635,24 +1947,17 @@ class GaeaDailyTask:
 
     async def godhoodreward_clicker(self, eth_address) -> None:
         try:
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward_clicker eth_address: {eth_address[:10]}")
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- invite
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
-
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            if eth_address.lower() != sender_address.lower():
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
-                raise Exception("Does not match the binding address.")
 
             # 购卡合约地址
             invite_address = Web3.to_checksum_address(CONTRACT_INVITE)
@@ -1664,11 +1969,11 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(invite_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            if reward_usdc < 10.0: # 余额大于10USDC显示绿色
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
-            else:
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
-            # return 'SUCCESS'
+            # if reward_usdc < 10.0: # 余额大于10USDC显示绿色
+            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
+            # else:
+            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
+            return reward_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward_clicker except: {error}")
 
@@ -1678,9 +1983,8 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodclaimed_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodclaimed_clicker eth_address: {eth_address[:10]}")
             # -------------------------------------------------------------------------- invite
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1708,38 +2012,19 @@ class GaeaDailyTask:
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
             
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 提现
-            transaction = invite_contract.functions.claimrewards( ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            transaction = invite_contract.functions.claimrewards( ).build_transaction(base_transaction)
             logger.debug(f"claimrewards transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # invite.claimrewards
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
-            
-            logger.success(f"The claimrewards transaction was send successfully! - reward_usdc: {reward_usdc}")
+
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claimrewards transaction send successfully! - reward_usdc: {reward_usdc}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodclaimed_clicker except: {error}")
@@ -1767,7 +2052,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_generate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -1789,12 +2074,12 @@ class GaeaDailyTask:
     async def ticket_buy_clicker(self, tick_level, tick_rebate, final_hash) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker ERROR: Incorrect private key")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker tick_level: {tick_level}")
             # -------------------------------------------------------------------------- ticket_buy
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -1850,79 +2135,41 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Insufficient USDC authorization amount for ticket_contract.")
                 # raise Exception("Insufficient USDC authorization amount for ticket_contract.")
 
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 购卡合约金额授权
-                transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(base_transaction)
                 logger.debug(f"approve transaction: {transaction}")
 
                 # 发送交易
-                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
                 if tx_success == False:
-                    logger.error(f"Ooops! Failed to send_transaction.")
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
                 
-                logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 购买
-            transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(base_transaction)
             logger.debug(f"buyTickets transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # ticket.buyTickets
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             
-            logger.success(f"The buyTickets transaction was send successfully! - tick_level: {tick_level} tick_rebate: {tick_rebate}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The buyTickets transaction send successfully! - tick_level: {tick_level} tick_rebate: {tick_rebate}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy_clicker except: {error}")
 
     ## 深度训练
-    async def is_deeptrain_clicker(self) -> None:
+    async def is_deeptrain_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -1933,16 +2180,18 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- isdeeptrain
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
 
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
             # 情绪合约地址
             emotion_address = Web3.to_checksum_address(CONTRACT_EMOTION)
             if ERA3_ONLINE_STAMP > current_timestamp:
@@ -1975,11 +2224,13 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} is_deeptrain_clicker except: {error}")
             return False
 
-    async def deeptrain_clicker(self, emotion_int, eth_address) -> None:
+    async def deeptrain_clicker(self, emotion_detail, eth_address) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
+            
+            emotion_int = emotion_detail.split('_')[0]
             
             emotion_int = int(emotion_int)
             if emotion_int not in [1,2,3]:
@@ -1988,7 +2239,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker emotion_int: {emotion_int}")
             # -------------------------------------------------------------------------- deeptrain
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2000,6 +2251,7 @@ class GaeaDailyTask:
             if eth_address.lower() != sender_address.lower():
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
                 raise Exception("Does not match the binding address.")
+
             # 情绪合约地址
             emotion_address = Web3.to_checksum_address(CONTRACT_EMOTION)
             if ERA3_ONLINE_STAMP > current_timestamp:
@@ -2084,97 +2336,41 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Insufficient USDC authorization amount for emotion_contract.")
                 # raise Exception("Insufficient USDC authorization amount for emotion_contract.")
 
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 情绪合约金额授权
                 MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
-                transaction = usdc_contract.functions.approve(emotion_address, MAX_UINT256).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = usdc_contract.functions.approve(emotion_address, MAX_UINT256).build_transaction(base_transaction)
                 logger.debug(f"approve transaction: {transaction}")
 
                 # 发送交易
-                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
                 if tx_success == False:
-                    logger.error(f"Ooops! Failed to send_transaction.")
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
                 
-                logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 情绪打卡
             if ERA3_ONLINE_STAMP > current_timestamp:
-                transaction = emotion_contract.functions.emotions( emotion_int ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = emotion_contract.functions.emotions( emotion_int ).build_transaction(base_transaction)
             elif EMOTION3_ONLINE_STAMP > current_timestamp:
-                transaction = emotion_contract.functions.emotions( sender_address, emotion_int ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = emotion_contract.functions.emotions( sender_address, emotion_int ).build_transaction(base_transaction)
             else:
-                transaction = emotion_contract.functions.bet( sender_address, emotion_int ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = emotion_contract.functions.bet( sender_address, emotion_int ).build_transaction(base_transaction)
             logger.debug(f"emotions transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # emotion.bet
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             
-            logger.info(f"The emotions transaction was send successfully! - transaction: {transaction}")
+            logger.info(f"The emotions transaction send successfully! - transaction: {transaction}")
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Deeptrain successfully! - emotion: {emotion_int}")
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deeptrain_clicker except: {error}")
@@ -2208,7 +2404,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deeptrain_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -2229,24 +2425,17 @@ class GaeaDailyTask:
 
     async def emotionreward_clicker(self, eth_address) -> None:
         try:
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward_clicker eth_address: {eth_address[:10]}")
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- Reward
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
-
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            if eth_address.lower() != sender_address.lower():
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
-                raise Exception("Does not match the binding address.")
 
             # 情绪提现合约地址
             reward_address = Web3.to_checksum_address(CONTRACT_REWARD)
@@ -2262,11 +2451,11 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(reward_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            if reward_usdc < 5.0: # 余额大于5USDC显示绿色
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
-            else:
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
-            # return 'SUCCESS'
+            # if reward_usdc < 5.0: # 余额大于5USDC显示绿色
+            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
+            # else:
+            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
+            return reward_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward_clicker except: {error}")
 
@@ -2278,7 +2467,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionclaimed_clicker eth_address: {eth_address[:10]}")
             # -------------------------------------------------------------------------- Reward
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2305,43 +2494,24 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(reward_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            if reward_usdc == 0: # 
+            if reward_usdc < 5.0: # 余额大于5USDC再提现
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
             
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 提现
-            transaction = reward_contract.functions.claim().build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            transaction = reward_contract.functions.claim().build_transaction(base_transaction)
             logger.debug(f"claim transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # reward.claim
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
             
-            logger.success(f"The claim transaction was send successfully! - reward_usdc: {reward_usdc}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claim transaction send successfully! - reward_usdc: {reward_usdc}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionclaimed_clicker except: {error}")
@@ -2360,7 +2530,7 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
             # -------------------------------------------------------------------------- deepchoice_list
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             # 情绪合约地址
             choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
@@ -2384,7 +2554,7 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_list_clicker except: {error}")
             return remainingOptions
 
-    async def is_deepchoice_clicker(self) -> None:
+    async def is_deepchoice_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -2395,16 +2565,18 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- isdeepchoice
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
 
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
             # 情绪合约地址
             choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
             choice_contract = web3_obj.eth.contract(address=choice_address, abi=contract_abi_choice)
@@ -2435,10 +2607,11 @@ class GaeaDailyTask:
             if choice_int not in [1,2,3,4]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker ERROR: Wrong choice_int: {choice_int}")
                 raise Exception(f'Wrong choice_int: {choice_int}')
+            soul_int = int(soul_int)
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker choice_int: {choice_int}")
             # -------------------------------------------------------------------------- deepchoice
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2450,6 +2623,7 @@ class GaeaDailyTask:
             if eth_address.lower() != sender_address.lower():
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
                 raise Exception("Does not match the binding address.")
+
             # 抉择合约地址
             choice_address = Web3.to_checksum_address(CONTRACT_CHOICE)
             choice_contract = web3_obj.eth.contract(address=choice_address, abi=contract_abi_choice)
@@ -2504,74 +2678,36 @@ class GaeaDailyTask:
                 logger.error(f"Ooops! Insufficient USDC authorization amount for choice_contract.")
                 # raise Exception("Insufficient USDC authorization amount for choice_contract.")
 
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 情绪合约金额授权
                 MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
-                transaction = usdc_contract.functions.approve(choice_address, MAX_UINT256).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+                transaction = usdc_contract.functions.approve(choice_address, MAX_UINT256).build_transaction(base_transaction)
                 logger.debug(f"approve transaction: {transaction}")
 
                 # 发送交易
-                tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
                 if tx_success == False:
-                    logger.error(f"Ooops! Failed to send_transaction.")
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
-                
-                logger.success(f"The approve transaction was send successfully! - transaction: {transaction}")
+
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The approve transaction send successfully! - transaction: {transaction}")
 
             # --------------------------------------------------------------------------
 
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 情绪打卡
-            transaction = choice_contract.functions.bet( sender_address, choice_int, soul_int ).build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            transaction = choice_contract.functions.bet( sender_address, choice_int, soul_int ).build_transaction(base_transaction)
             logger.debug(f"choices transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # choice.bet
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
-            
-            logger.info(f"The choices transaction was send successfully! - transaction: {transaction}")
+
+            logger.info(f"The choices transaction send successfully! - transaction: {transaction}")
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Deepchoice successfully! - choice: {choice_int}")
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker except: {error}")
@@ -2605,7 +2741,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -2626,24 +2762,17 @@ class GaeaDailyTask:
 
     async def choicereward_clicker(self, eth_address) -> None:
         try:
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward_clicker ERROR: Incorrect private key")
-                raise Exception(f"Incorrect private key")
-            
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward_clicker eth_address: {eth_address[:10]}")
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- Reward
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
-
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            if eth_address.lower() != sender_address.lower():
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
-                raise Exception("Does not match the binding address.")
 
             # 抉择提现合约地址
             award_address = Web3.to_checksum_address(CONTRACT_AWARD)
@@ -2655,11 +2784,11 @@ class GaeaDailyTask:
             award_usdc = web3_obj.from_wei(award_sender_usdc, 'mwei')
             logger.debug(f"award_usdc: {award_usdc}")
 
-            if award_usdc < 5.0: # 余额大于5USDC显示绿色
-                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
-            else:
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
-            # return 'SUCCESS'
+            # if award_usdc < 5.0: # 余额大于5USDC显示绿色
+            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
+            # else:
+            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
+            return award_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward_clicker except: {error}")
 
@@ -2671,7 +2800,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceclaimed_clicker eth_address: {eth_address[:10]}")
             # -------------------------------------------------------------------------- Reward
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2694,49 +2823,30 @@ class GaeaDailyTask:
             award_usdc = web3_obj.from_wei(award_sender_usdc, 'mwei')
             logger.debug(f"award_usdc: {award_usdc}")
 
-            if award_usdc == 0: # 
+            if award_usdc < 5.0: # 余额大于5USDC再提现
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
             
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 提现
-            transaction = award_contract.functions.claim().build_transaction(
-                    {
-                        "chainId": WEB3_CHAINID,
-                        "from": sender_address,
-                        "gas": 20000000,  # 最大 Gas 用量
-                        "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                        "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                        "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                    }
-                )
+            transaction = award_contract.functions.claim().build_transaction(base_transaction)
             logger.debug(f"claim transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # award.claim
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
-            
-            logger.success(f"The claim transaction was send successfully! - award_usdc: {award_usdc}")
+
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The claim transaction send successfully! - award_usdc: {award_usdc}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceclaimed_clicker except: {error}")
 
     ## NFT供奉 snft
-    async def snft_ismint_clicker(self) -> None:
+    async def snft_ismint_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -2747,16 +2857,18 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- is_snftmint
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
 
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
             # NFT合约地址
             snftmint_address = Web3.to_checksum_address(CONTRACT_SNFTMINT)
             snftmint_contract = web3_obj.eth.contract(address=snftmint_address, abi=contract_abi_mint)
@@ -2794,7 +2906,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft_generate_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft_generate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft_generate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -2821,7 +2933,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftmint_clicker eth_address: {eth_address[:10]}")
             # -------------------------------------------------------------------------- snftmint
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -2845,51 +2957,23 @@ class GaeaDailyTask:
             snftmint_id = snftmint_contract.functions.getTokenID( sender_address ).call()
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} snftmint_id: {snftmint_id}")
             
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 铸造
             if snftmint_id==0:
-                transaction = snftmint_contract.functions.mintNFT(nft_level,block_number,final_hash).build_transaction(
-                        {
-                            "chainId": WEB3_CHAINID,
-                            "from": sender_address,
-                            "gas": 20000000,  # 最大 Gas 用量
-                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                        }
-                    )
+                transaction = snftmint_contract.functions.mintNFT(nft_level,block_number,final_hash).build_transaction(base_transaction)
                 logger.debug(f"mintNFT transaction: {transaction}")
             else:
-                transaction = snftmint_contract.functions.upgradeNFT(snftmint_id, nft_level,block_number,final_hash).build_transaction(
-                        {
-                            "chainId": WEB3_CHAINID,
-                            "from": sender_address,
-                            "gas": 20000000,  # 最大 Gas 用量
-                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                        }
-                    )
+                transaction = snftmint_contract.functions.upgradeNFT(snftmint_id, nft_level,block_number,final_hash).build_transaction(base_transaction)
                 logger.debug(f"upgradeNFT transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # snftmint.mintNFT
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
-            
-            logger.success(f"The { 'mintNFT' if snftmint_id==0 else 'upgradeNFT' } transaction was send successfully! - snftmint_id: {snftmint_id} nft_level: {nft_level}")
+
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The { 'mintNFT' if snftmint_id==0 else 'upgradeNFT' } transaction send successfully! - snftmint_id: {snftmint_id} nft_level: {nft_level}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftmint_clicker except: {error}")
@@ -2916,7 +3000,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftlist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftlist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftlist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -2962,7 +3046,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -2982,7 +3066,7 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate_clicker except: {error}")
 
     ## NFT供奉 anft
-    async def anft_ismint_clicker(self) -> None:
+    async def anft_ismint_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
@@ -2993,16 +3077,18 @@ class GaeaDailyTask:
                 self.client.userid = login_response.get('user_info', None).get('uid', None)
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
+            # # 钱包地址
+            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # 钱包地址
+            sender_address = Web3.to_checksum_address(eth_address)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
+
             # -------------------------------------------------------------------------- is_anftmint
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
 
-            # 钱包地址
-            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
-            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
             # NFT合约地址
             anftmint_address = Web3.to_checksum_address(CONTRACT_ANFTMINT)
             anftmint_contract = web3_obj.eth.contract(address=anftmint_address, abi=contract_abi_mint)
@@ -3040,7 +3126,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft_generate_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft_generate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft_generate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3067,7 +3153,7 @@ class GaeaDailyTask:
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker eth_address: {eth_address[:10]}")
             # -------------------------------------------------------------------------- anftmint
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -3091,51 +3177,23 @@ class GaeaDailyTask:
             anftmint_id = anftmint_contract.functions.getTokenID( sender_address ).call()
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} anftmint_id: {anftmint_id}")
             
-            # 获取当前Gas
-            latest_block = web3_obj.eth.get_block('latest')
-            if latest_block is None:
-                logger.error(f"Ooops! Failed to eth.get_block.")
-                raise Exception("Failed to eth.get_block.")
-            base_fee_per_gas = latest_block['baseFeePerGas']
-            priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             # 构建交易 - 铸造
             if anftmint_id==0:
-                transaction = anftmint_contract.functions.mintNFT(nft_ticket,block_number,final_hash).build_transaction(
-                        {
-                            "chainId": WEB3_CHAINID,
-                            "from": sender_address,
-                            "gas": 20000000,  # 最大 Gas 用量
-                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                        }
-                    )
+                transaction = anftmint_contract.functions.mintNFT(nft_ticket,block_number,final_hash).build_transaction(base_transaction)
                 logger.debug(f"mintNFT transaction: {transaction}")
             else:
-                transaction = anftmint_contract.functions.upgradeNFT(anftmint_id, nft_ticket,block_number,final_hash).build_transaction(
-                        {
-                            "chainId": WEB3_CHAINID,
-                            "from": sender_address,
-                            "gas": 20000000,  # 最大 Gas 用量
-                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                        }
-                    )
+                transaction = anftmint_contract.functions.upgradeNFT(anftmint_id, nft_ticket,block_number,final_hash).build_transaction(base_transaction)
                 logger.debug(f"upgradeNFT transaction: {transaction}")
 
             # 发送交易
-            tx_success, _ = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # anftmint.mintNFT
             if tx_success == False:
-                logger.error(f"Ooops! Failed to send_transaction.")
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
-            
-            logger.success(f"The { 'mintNFT' if anftmint_id==0 else 'upgradeNFT' } transaction was send successfully! - anftmint_id: {anftmint_id} nft_ticket: {nft_ticket}")
+
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The { 'mintNFT' if anftmint_id==0 else 'upgradeNFT' } transaction send successfully! - anftmint_id: {anftmint_id} nft_ticket: {nft_ticket}")
             return "SUCCESS"
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker except: {error}")
@@ -3162,7 +3220,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftlist_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftlist_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftlist_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3208,7 +3266,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3228,8 +3286,12 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate_clicker except: {error}")
 
     ## 汇聚
-    async def funds_pooling_clicker(self) -> None:
+    async def funds_pooling_clicker(self, eth_address) -> None:
         try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
             headers = self.getheaders()
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
@@ -3240,7 +3302,7 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
             # -------------------------------------------------------------------------- balanceOf
-            web3_obj = connect_web3_rpc()
+            web3_obj = self._web3_instance
             
             current_timestamp = int(time.time())
             logger.debug(f"current_timestamp: {current_timestamp}")
@@ -3248,8 +3310,14 @@ class GaeaDailyTask:
             # 钱包地址
             sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
             sender_balance_eth = web3_obj.eth.get_balance(sender_address)
-            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - eth: {web3_obj.from_wei(sender_balance_eth, 'ether')}")
+            if sender_balance_eth == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
+                return "ERRRO"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
+
             # USDC合约地址
             usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
             usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
@@ -3274,80 +3342,48 @@ class GaeaDailyTask:
             # USDC账户余额
             sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
             logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {web3_obj.from_wei(sender_balance_usdc, 'mwei')}")
+            sender_usdc = web3_obj.from_wei(sender_balance_usdc, 'mwei')
+            logger.debug(f"sender_usdc: {sender_usdc}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {sender_usdc}")
             time.sleep(1)
-            if 1000000 < sender_balance_usdc and pooling_addr != '': # 大于1开始归集USDC
-                # 获取当前Gas
-                latest_block = web3_obj.eth.get_block('latest')
-                if latest_block is None:
-                    logger.error(f"Ooops! Failed to eth.get_block.")
-                    raise Exception("Failed to eth.get_block.")
-                base_fee_per_gas = latest_block['baseFeePerGas']
-                priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-                max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-                logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-                logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-                logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            if 10000000 < sender_balance_usdc and pooling_addr != '': # 大于10开始归集USDC
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 转账
-                transaction = usdc_contract.functions.transfer(pooling_address, sender_balance_usdc).build_transaction(
-                        {
-                            "chainId": WEB3_CHAINID,
-                            "from": sender_address,
-                            "gas": 20000000,  # 最大 Gas 用量
-                            "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-                            "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-                            "nonce": web3_obj.eth.get_transaction_count(sender_address),
-                        }
-                    )
+                transaction = usdc_contract.functions.transfer(pooling_address, sender_balance_usdc).build_transaction(base_transaction)
                 logger.debug(f"transfer transaction: {transaction}")
 
                 # 发送交易
-                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.transfer
                 if tx_success == False:
                     logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
-                logger.success(f"The transfer transaction was send successfully! - usdc: {sender_balance_usdc}")
+
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction send successfully! - usdc: {sender_usdc}")
             
             # # SXP账户余额
             # sender_balance_sxp = sxp_contract.functions.balanceOf(sender_address).call()
             # logger.debug(f"sender_balance_sxp: {sender_balance_sxp}")
+            # sender_sxp = web3_obj.from_wei(sender_balance_sxp, 'mwei')
+            # logger.debug(f"sender_sxp: {sender_sxp}")
             # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - sxp: {web3_obj.from_wei(sender_balance_sxp, 'mwei')}")
             # time.sleep(1)
             # if 100000000 < sender_balance_sxp and pooling_addr != '': # 大于100开始归集SXP
-            #     # 获取当前Gas
-            #     latest_block = web3_obj.eth.get_block('latest')
-            #     if latest_block is None:
-            #         logger.error(f"Ooops! Failed to eth.get_block.")
-            #         raise Exception("Failed to eth.get_block.")
-            #     base_fee_per_gas = latest_block['baseFeePerGas']
-            #     priority_fee_per_gas = web3_obj.eth.max_priority_fee  # 获取推荐的小费
-            #     max_fee_per_gas = base_fee_per_gas + priority_fee_per_gas
-            #     logger.debug(f"base_fee_per_gas: {base_fee_per_gas} wei")
-            #     logger.debug(f"priority_fee_per_gas: {priority_fee_per_gas} wei")
-            #     logger.debug(f"max_fee_per_gas: {max_fee_per_gas} wei")
-
+            #     # 使用公共函数构建基础交易参数
+            #     base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
             #     # 构建交易 - 转账
-            #     transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(
-            #             {
-            #                 "chainId": WEB3_CHAINID,
-            #                 "from": sender_address,
-            #                 "gas": 20000000,  # 最大 Gas 用量
-            #                 "maxFeePerGas": max_fee_per_gas,  # 新的费用参数
-            #                 "maxPriorityFeePerGas": priority_fee_per_gas,  # 新的费用参数
-            #                 "nonce": web3_obj.eth.get_transaction_count(sender_address),
-            #             }
-            #         )
+            #     transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(base_transaction)
             #     logger.debug(f"transfer transaction: {transaction}")
 
             #     # 发送交易
-            #     tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, max_fee_per_gas, priority_fee_per_gas)
+            #     tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # sxp.transfer
             #     if tx_success == False:
             #         logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
             #         raise Exception("Failed to send_transaction.")
-            #     logger.success(f"The transfer transaction was send successfully! - sxp: {sender_balance_sxp}")
+
+            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction send successfully! - sxp: {sender_sxp}")
             
-            return 0
+            return sender_usdc
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling_clicker except: {error}")
             return 0
@@ -3381,7 +3417,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3427,7 +3463,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3468,7 +3504,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_list_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3509,7 +3545,7 @@ class GaeaDailyTask:
             if 'ERROR' in response:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker {response}")
                 raise Exception(response)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
@@ -3539,7 +3575,6 @@ class GaeaDailyTask:
             clicker_response = await self.checkin_clicker()
             if clicker_response is None:
                 return "ERROR"
-            
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} checkin response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
@@ -3557,7 +3592,6 @@ class GaeaDailyTask:
             clicker_response = await self.signin_clicker()
             if clicker_response is None:
                 return "ERROR"
-            
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} signin response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
@@ -3593,7 +3627,7 @@ class GaeaDailyTask:
                     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete response: {clicker_response}")
 
                     idx+=1
-                    delay = random.randint(1, 5)
+                    delay = random.randint(10, 20)
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete delay: {delay} seconds")
                     await asyncio.sleep(delay)
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} referral_complete count: {idx}")
@@ -3619,13 +3653,14 @@ class GaeaDailyTask:
             clicker_response = await self.register_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register response: {clicker_response}")
             
             self.client.userid = clicker_response.get('uid', None)
             set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
 
             clicker_response.pop('referral_link', None)
             clicker_response.pop('avatar', None)
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} register response: {clicker_response}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Registered successfully - userid: {clicker_response['uid']}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_register except: {error}")
@@ -3642,13 +3677,14 @@ class GaeaDailyTask:
             clicker_response = await self.login_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login response: {clicker_response}")
             
             self.client.token = clicker_response.get('token', None)
             set_data_for_token(self.client.runname, self.client.id, self.client.token)
             self.client.userid = clicker_response.get('user_info', None).get('uid', None)
             set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
 
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response['user_info']}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Login successfully - userinfo: {clicker_response['user_info']}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_login except: {error}")
@@ -3665,10 +3701,11 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker()
             if clicker_response is None:
                 return "ERROR"
-            eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
             
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} username: {clicker_response['name']} referral_code: {clicker_response['referral_code']} eth_address: {eth_address[:10]} medal: {clicker_response['medal']} medal_expired: {((clicker_response['medal_expired']-int(time.time()))/60/60/24 if clicker_response['medal'] else 0):.2f} days")
+            eth_address = clicker_response['eth_address']
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - username: {clicker_response['name']} eth_address: {eth_address[:10]} medal: {clicker_response['medal']} medal_expired: {((clicker_response['medal_expired']-int(time.time()))/60/60/24 if clicker_response['medal'] else 0):.2f} days")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_session except: {error}")
@@ -3685,8 +3722,9 @@ class GaeaDailyTask:
             clicker_response = await self.earninfo_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} earninfo response: {clicker_response}")
             
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era_gaea: {clicker_response['era_gaea']} era_soul: {clicker_response['era_soul']} total_soul: {clicker_response['total_soul']} today_uptime: {(clicker_response['today_uptime']/60):.2f} hours")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - era_gaea: {clicker_response['era_gaea']} era_soul: {clicker_response['era_soul']} total_soul: {clicker_response['total_soul']} today_uptime: {(clicker_response['today_uptime']/60):.2f} hours")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_earninfo except: {error}")
@@ -3705,7 +3743,7 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} era3_info response: {clicker_response}")
             
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email.ljust(24)} era3_info clicker_response: {clicker_response}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - userinfo: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_era3info except: {error}")
@@ -3726,8 +3764,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # bindaddress
             if clicker_response is None:
                 return "ERROR"
-            eth_address = clicker_response['eth_address']
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
+            
+            eth_address = clicker_response['eth_address']
             if eth_address is not None and eth_address != "":
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The address has been bound")
                 return "SUCCESS"
@@ -3740,7 +3779,9 @@ class GaeaDailyTask:
             clicker_response = await self.bind_address_clicker()
             if clicker_response is None:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bindaddress response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bindaddress response: {clicker_response}")
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_bindaddress except: {error}")
@@ -3754,9 +3795,11 @@ class GaeaDailyTask:
                 return "ERROR"
             
             # -------------------------------------------------------------------------- godhoodinfo
-            clicker_response = await self.godhoodinfo_clicker()
+            clicker_response = await self.godhoodinfo_clicker() # mood
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response['mood']}")
+            
             if clicker_response['mood'] is None:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Please mint GODHOOD ID first")
                 return "ERROR"
@@ -3770,9 +3813,9 @@ class GaeaDailyTask:
             while total > 0:
                 # -------------------------------------------------------------------------- blindbox_list
                 clicker_response = await self.blindbox_list_clicker()
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list response: {clicker_response}")
                 if clicker_response is None:
                     return "ERROR"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_list response: {clicker_response}")
                 cdkeys = clicker_response.get("cdkeys", [])
                 total = clicker_response.get("total", 0)
                 cdkeys_len = len(cdkeys)
@@ -3790,14 +3833,17 @@ class GaeaDailyTask:
                     blindboxes = await self.blindbox_open_clicker(cdkeys)
                     if blindboxes is None:
                         return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open response: {blindboxes}")
                     box_soul=0
+                    box_core=0
                     box_usd=0
                     box_ticket=0
                     for blindbox in blindboxes:
                         box_soul   += blindbox['soul']
+                        box_core   += blindbox['core']
                         box_usd    += blindbox['usd']
                         box_ticket += blindbox['ticket']
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} count: {cdkeys_len}/{total} soul: {box_soul} usd: {round(box_usd,2)} ticket: {box_ticket}")
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} count: {cdkeys_len}/{total} soul: {box_soul} core: {box_core} ticket: {box_ticket} usd: {round(box_usd,2)}")
                 else:
                     i=0
                     for cdkey in cdkeys:
@@ -3805,15 +3851,19 @@ class GaeaDailyTask:
                         blindboxes = await self.blindbox_open_clicker([cdkey])
                         if blindboxes is None:
                             return "ERROR"
+                        logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} blindbox_open response: {blindboxes}")
                         box_soul=0
+                        box_core=0
                         box_usd=0
                         box_ticket=0
                         for blindbox in blindboxes:
                             box_soul   += blindbox['soul']
+                            box_core   += blindbox['core']
                             box_usd    += blindbox['usd']
                             box_ticket += blindbox['ticket']
-                        logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} count: {i}/{cdkeys_len} soul: {box_soul} usd: {round(box_usd,2)} ticket: {box_ticket}")
+                        logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} count: {i}/{cdkeys_len} soul: {box_soul} core: {box_core} ticket: {box_ticket} usd: {round(box_usd,2)}")
             
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} count: {i}/{cdkeys_len} soul: {box_soul} core: {box_core} ticket: {box_ticket} usd: {round(box_usd,2)}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_openblindbox except: {error}")
@@ -3826,6 +3876,10 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
     
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
             # # -------------------------------------------------------------------------- ticket_level
             tick_level=os.environ.get('TICKET_LEVEL', '0')
             if tick_level == '0':
@@ -3834,11 +3888,11 @@ class GaeaDailyTask:
             tick_level=int(tick_level)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tick_level: {tick_level}")
             
-            # -------------------------------------------------------------------------- generate
+            # -------------------------------------------------------------------------- ticketgenerate
             clicker_response = await self.ticket_generate_clicker(tick_level)
             if clicker_response is None:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} generate response: {clicker_response}")  # {'level': 1, 'percentage': 90, 'final_hash': 'xxxxxxx'}
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketgenerate response: {clicker_response}")  # {'level': 1, 'percentage': 90, 'final_hash': 'xxxxxxx'}
             
             tick_rebate = clicker_response['percentage']
             final_hash = clicker_response['final_hash']
@@ -3852,18 +3906,20 @@ class GaeaDailyTask:
             blindboxes = await self.ticket_buy_clicker(tick_level,tick_rebate,final_hash)
             if blindboxes is None:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} buy response: {blindboxes}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy response: {blindboxes}")
             
             delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # ticket_buy
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_buy delay: {delay} seconds")
             await asyncio.sleep(delay)
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Ticket purchase successfully")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_buytickets except: {error}")
             return f"ERROR: {error}"
 
     @helper
-    async def daily_clicker_godhoodid(self):
+    async def daily_clicker_buygodhoodid(self):
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
@@ -3880,8 +3936,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # godhoodid
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -3897,15 +3954,20 @@ class GaeaDailyTask:
             #         return "ERROR"
             #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} bindaddress response: {clicker_response}")
             
-            # -------------------------------------------------------------------------- 5 godhoodid
-            await self.godhoodid_clicker()
+            # -------------------------------------------------------------------------- 5 godhoodid_buy
+            clicker_response = await self.godhoodid_buy_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_buy response: {clicker_response}")
 
-            delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # godhoodid - inviter
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid delay: {delay} seconds")
+            delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # buygodhoodid - inviter
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodid_buy delay: {delay} seconds")
             await asyncio.sleep(delay)
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} GodhoodID purchase successfully")
             return "SUCCESS"
         except Exception as error:
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodid except: {error}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_buygodhoodid except: {error}")
             return f"ERROR: {error}"
 
     @helper
@@ -3915,22 +3977,37 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            # -------------------------------------------------------------------------- godhoodinfo
-            clicker_response = await self.godhoodinfo_clicker()
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker() # godhoodreward
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
             
-            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response['mood']}")
+            eth_address = clicker_response['eth_address']
+            if eth_address is None and eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            # -------------------------------------------------------------------------- godhoodinfo
+            clicker_response = await self.godhoodinfo_clicker() # mood
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response['mood']}")
+            
             if clicker_response['mood']:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotion_code: {clicker_response['mood']['emotion_code']}")
                 return "SUCCESS"
             
             # -------------------------------------------------------------------------- godhoodemotion
-            clicker_response = await self.godhoodemotion_clicker()
+            clicker_response = await self.godhoodemotion_clicker(eth_address)
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion response: {clicker_response}")
             
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodemotion response: {clicker_response}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodemotion except: {error}")
@@ -3944,15 +4021,16 @@ class GaeaDailyTask:
                 return "ERROR"
             
             # -------------------------------------------------------------------------- godhoodinfo
-            clicker_response = await self.godhoodinfo_clicker()
+            clicker_response = await self.godhoodinfo_clicker() # mood
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response['mood']}")
             
-            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response['mood']}")
-            if clicker_response['mood'] is None:
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotion_code: None")
-            else:
+            if clicker_response['mood']:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotion_code: {clicker_response['mood']['emotion_code']}")
+                return "SUCCESS"
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotion_code: None")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodinfo except: {error}")
@@ -3966,8 +4044,12 @@ class GaeaDailyTask:
                 return "ERROR"
             
             # -------------------------------------------------------------------------- godhoodgrowthinfo
-            godhoodgrowthinfo =  await self.godhoodgrowthinfo_clicker()
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo: {godhoodgrowthinfo}")
+            clicker_response = await self.godhoodgrowthinfo_clicker()
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodgrowthinfo response: {clicker_response}")
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} growthinfo: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodgrowthinfo except: {error}")
@@ -3980,14 +4062,29 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            # -------------------------------------------------------------------------- godhoodinfo
-            clicker_response = await self.godhoodinfo_clicker()
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker() # godhoodreward
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            
+            eth_address = clicker_response['eth_address']
+            if eth_address is None and eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            # -------------------------------------------------------------------------- godhoodinfo blindbox_usd
+            clicker_response = await self.godhoodinfo_clicker() # blindbox_usd
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response['mood']}")
+            
             if clicker_response['mood'] is None:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Please mint GODHOOD ID first")
                 return "ERROR"
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response}")
             blindbox_usd = clicker_response['godhood']['blindbox_usd']
             if blindbox_usd == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: No transfer required")
@@ -3998,14 +4095,16 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- godhoodtransfer
-            clicker_response = await self.godhoodtransfer_clicker()
+            clicker_response = await self.godhoodtransfer_clicker(eth_address)
             if clicker_response is None:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer response: {clicker_response} - blindbox_usd: {blindbox_usd}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer response: {clicker_response} - blindbox_usd: {blindbox_usd}")
             
             delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # godhoodtransfer
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodtransfer delay: {delay} seconds")
             await asyncio.sleep(delay)
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} {clicker_response} - blindbox_usd: {blindbox_usd}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodtransfer except: {error}")
@@ -4018,16 +4117,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # godhoodreward
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4037,9 +4133,14 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- godhoodreward
             clicker_response = await self.godhoodreward_clicker(eth_address)
-            if clicker_response is None:
+            if clicker_response is None or str(clicker_response).find("ERROR") > -1:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward response: {clicker_response}")
+            
+            if clicker_response < 10.0: # 余额大于10USDC显示绿色
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
+            else:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodreward except: {error}")
@@ -4060,8 +4161,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # godhoodclaimed
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4073,11 +4175,13 @@ class GaeaDailyTask:
             clicker_response = await self.godhoodclaimed_clicker(eth_address)
             if clicker_response is None or str(clicker_response).find("ERROR") > -1:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodclaimed response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodclaimed response: {clicker_response}")
             
             delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # godhoodclaimed
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodclaimed delay: {delay} seconds")
             await asyncio.sleep(delay)
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Godhood claimed successful")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_godhoodclaimed except: {error}")
@@ -4090,16 +4194,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # emotionreward
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4109,9 +4210,14 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- emotionreward
             clicker_response = await self.emotionreward_clicker(eth_address)
-            if clicker_response is None:
+            if clicker_response is None or str(clicker_response).find("ERROR") > -1:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward response: {clicker_response}")
+            
+            if clicker_response < 5.0: # 余额大于5USDC显示绿色
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
+            else:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_emotionreward except: {error}")
@@ -4132,8 +4238,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # emotionclaimed
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4145,11 +4252,13 @@ class GaeaDailyTask:
             clicker_response = await self.emotionclaimed_clicker(eth_address)
             if clicker_response is None or str(clicker_response).find("ERROR") > -1:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionclaimed response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionclaimed response: {clicker_response}")
             
             delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # emotionclaimed
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionclaimed delay: {delay} seconds")
             await asyncio.sleep(delay)
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Emotion claimed successful")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_emotionclaimed except: {error}")
@@ -4162,16 +4271,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # choicereward
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4181,9 +4287,14 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- choicereward
             clicker_response = await self.choicereward_clicker(eth_address)
-            if clicker_response is None:
+            if clicker_response is None or str(clicker_response).find("ERROR") > -1:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward response: {clicker_response}")
+            
+            if clicker_response < 5.0: # 余额大于5USDC显示绿色
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
+            else:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_choicereward except: {error}")
@@ -4204,8 +4315,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # choiceclaimed
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4217,11 +4329,13 @@ class GaeaDailyTask:
             clicker_response = await self.choiceclaimed_clicker(eth_address)
             if clicker_response is None or str(clicker_response).find("ERROR") > -1:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceclaimed response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceclaimed response: {clicker_response}")
             
             delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # choiceclaimed
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceclaimed delay: {delay} seconds")
             await asyncio.sleep(delay)
+            
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Choice claimed successful")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_choiceclaimed except: {error}")
@@ -4242,8 +4356,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # snftmint
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4256,17 +4371,17 @@ class GaeaDailyTask:
             clicker_response = await self.snft_generate_clicker()
             if clicker_response is None:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft generate response: {clicker_response}")  # {'nft_score': 19880, 'nft_level': 4, 'nft_role': 'Soul Genesis IV'}
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftgenerate response: {clicker_response}")  # {'nft_score': 19880, 'nft_level': 4, 'nft_role': 'Soul Genesis IV'}
             current_level = clicker_response['nft_level']
             if current_level == 0: # 无效等级
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_level: {current_level} | Insufficient level.")
                 return "ERROR"
-            # elif current_level == 4:
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_level: {current_level} | Maximum level.")
-            #     return "SUCCESS"
+            elif current_level == 4:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_level: {current_level} | Maximum level.")
+                return "SUCCESS"
             
             # -------------------------------------------------------------------------- snftmint
-            nftlevel =  await self.snft_ismint_clicker()
+            nftlevel = await self.snft_ismint_clicker(eth_address)
             if nftlevel == 4: # 已铸造,最大等级,不可升级
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftlevel: {nftlevel} | No need to upgrade to the maximum level.")
                 return "SUCCESS"
@@ -4279,7 +4394,7 @@ class GaeaDailyTask:
                 clicker_response = await self.snft_generate_clicker()
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft generate response: {clicker_response}")  # {'nft_level': 3, 'block_number': 33203269, 'final_hash': '0x46fcb058ce'}
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftgenerate response: {clicker_response}")  # {'nft_level': 3, 'block_number': 33203269, 'final_hash': '0x46fcb058ce'}
                 if len(self.client.prikey) in [64,66]:
                     nft_level = clicker_response['nft_level']
                     block_number = clicker_response['block_number']
@@ -4290,10 +4405,9 @@ class GaeaDailyTask:
                     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # snftmint
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftmint delay: {delay} seconds")
                     await asyncio.sleep(delay)
+                return "SUCCESS"
             else:
                 raise Exception("nftlevel error")
-            
-            return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_snftmint except: {error}")
             return f"ERROR: {error}"
@@ -4305,16 +4419,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # snftinfo
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4324,7 +4435,9 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- snftmint
-            nftlevel =  await self.snft_ismint_clicker()
+            nftlevel = await self.snft_ismint_clicker(eth_address)
+            if nftlevel is None:
+                return "ERROR"
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftlevel: {nftlevel}")
             return "SUCCESS"
         except Exception as error:
@@ -4338,16 +4451,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # snftoblate
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4361,7 +4471,7 @@ class GaeaDailyTask:
             if clicker_response is None:
                 return "ERROR"
             
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftlist clicker_response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftlist response: {clicker_response}")
             if clicker_response['claimed']==1:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft oblate already completed")
                 return "SUCCESS"
@@ -4379,11 +4489,14 @@ class GaeaDailyTask:
                     clicker_response = await self.snftoblate_clicker(tokenids)
                     if clicker_response is None:
                         return "ERROR"
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snft oblate response: {clicker_response}")
-                
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate response: {clicker_response}")
+
                     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # snftoblate
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} snftoblate delay: {delay} seconds")
                     await asyncio.sleep(delay)
+                
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} {clicker_response}")
+                return "SUCCESS"
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_snftoblate except: {error}")
@@ -4404,8 +4517,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # anftmint
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4418,14 +4532,14 @@ class GaeaDailyTask:
             clicker_response = await self.anft_generate_clicker()
             if clicker_response is None:
                 return "ERROR"
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft generate response: {clicker_response}")  # {'nft_score': 19880, 'nft_ticket': 4, 'nft_role': 'Soul Genesis IV'}
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftgenerate response: {clicker_response}")  # {'nft_score': 19880, 'nft_ticket': 4, 'nft_role': 'Soul Genesis IV'}
             current_ticket = clicker_response['nft_ticket']
             if current_ticket == 0: # 无效等级
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_ticket: {current_ticket} | Insufficient ticket.")
                 return "ERROR"
             
             # -------------------------------------------------------------------------- anftmint
-            nftticket =  await self.anft_ismint_clicker()
+            nftticket = await self.anft_ismint_clicker(eth_address)
             if nftticket == current_ticket: # 已铸造,无效升级
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftticket: {nftticket} | No need to upgrade if at the same ticket.")
                 return "SUCCESS"
@@ -4435,7 +4549,7 @@ class GaeaDailyTask:
                 clicker_response = await self.anft_generate_clicker()
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft generate response: {clicker_response}")  # {'nft_ticket': 3, 'block_number': 33203269, 'final_hash': '0x46fcb058ce'}
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftgenerate response: {clicker_response}")  # {'nft_ticket': 3, 'block_number': 33203269, 'final_hash': '0x46fcb058ce'}
                 if len(self.client.prikey) in [64,66]:
                     nft_ticket = clicker_response['nft_ticket']
                     block_number = clicker_response['block_number']
@@ -4461,16 +4575,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # anftinfo
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4480,7 +4591,9 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- anftmint
-            nftticket =  await self.anft_ismint_clicker()
+            nftticket = await self.anft_ismint_clicker(eth_address)
+            if nftticket is None:
+                return "ERROR"
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftticket: {nftticket}")
             return "SUCCESS"
         except Exception as error:
@@ -4494,16 +4607,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # anftoblate
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4516,8 +4626,8 @@ class GaeaDailyTask:
             clicker_response = await self.anftlist_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftlist response: {clicker_response}")
             
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftlist clicker_response: {clicker_response}")
             if clicker_response['claimed']==1:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft oblate already completed")
                 return "SUCCESS"
@@ -4535,12 +4645,14 @@ class GaeaDailyTask:
                     clicker_response = await self.anftoblate_clicker(tokenids)
                     if clicker_response is None:
                         return "ERROR"
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anft oblate response: {clicker_response}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate response: {clicker_response}")
                 
                     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # anftoblate
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate delay: {delay} seconds")
                     await asyncio.sleep(delay)
-            return "SUCCESS"
+                    
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} {clicker_response}")
+                return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_anftoblate except: {error}")
             return f"ERROR: {error}"
@@ -4552,19 +4664,11 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
-            clicker_response = await self.session_clicker()
+            clicker_response = await self.session_clicker() # mission
             if clicker_response is None:
                 return "ERROR"
-            eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
-            if eth_address is None and eth_address == "":
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
-                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
             
             delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
@@ -4574,8 +4678,7 @@ class GaeaDailyTask:
             clicker_response = await self.missionlist_clicker()
             if clicker_response is None:
                 return "ERROR"
-            
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist clicker_response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionlist response: {clicker_response}")
             
             for mission in clicker_response:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} mission: {mission}")
@@ -4586,6 +4689,8 @@ class GaeaDailyTask:
                         continue
                     # -------------------------------------------------------------------------- missionconnect
                     clicker_response = await self.missionconnect_clicker(mission_id)
+                    if clicker_response is None:
+                        return "ERROR"
                     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missionconnect response: {clicker_response} - mission: {mission_id}")
                     
                     delay = random.randint(10, 20)
@@ -4594,6 +4699,8 @@ class GaeaDailyTask:
                 elif mission['status'] == 1 and type == 2:  # 0 - 未开始 / 1 - 可领取 / 2 - 已结束
                     # -------------------------------------------------------------------------- missioncomplete
                     clicker_response = await self.missioncomplete_clicker(mission_id)
+                    if clicker_response is None:
+                        return "ERROR"
                     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} missioncomplete response: {clicker_response} - mission: {mission_id}")
 
                     delay = random.randint(10, 20)
@@ -4613,16 +4720,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # milestoneburn
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4635,8 +4739,7 @@ class GaeaDailyTask:
             clicker_response = await self.milestonelist_clicker()
             if clicker_response is None:
                 return "ERROR"
-            
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist clicker_response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist response: {clicker_response}")
             
             ticket_burn=int(os.environ.get('TASK_TICKET', '0'))
             ticket_burn_random=int(os.environ.get('TASK_TICKET_RANDOM', '0'))
@@ -4656,6 +4759,8 @@ class GaeaDailyTask:
                         burn_real = ticket_burn - burn_user
                         # -------------------------------------------------------------------------- milestoneburn
                         clicker_response = await self.milestoneburn_clicker(milestone_id, burn_real)
+                        if clicker_response is None:
+                            return "ERROR"
                         logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneburn response: {clicker_response} - milestone: {milestone_id} burn: {burn_real}")
             
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Milestone burn completed")
@@ -4671,16 +4776,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # milestoneclaim
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4693,8 +4795,7 @@ class GaeaDailyTask:
             clicker_response = await self.milestonelist_clicker()
             if clicker_response is None:
                 return "ERROR"
-            
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist clicker_response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestonelist response: {clicker_response}")
             
             for milestone in clicker_response:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestone: {milestone}")
@@ -4706,6 +4807,8 @@ class GaeaDailyTask:
                 if milestone['claim_sxp'] == 1:
                     # -------------------------------------------------------------------------- milestoneclaim
                     clicker_response = await self.milestoneclaim_clicker(milestone_id, 2)
+                    if clicker_response is None:
+                        return "ERROR"
                     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} milestoneclaim response: {clicker_response} - claim_sxp: {milestone_id}")
                     
                     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # milestoneclaim
@@ -4725,16 +4828,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # visionburn
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4747,8 +4847,7 @@ class GaeaDailyTask:
             clicker_response = await self.visionlist_clicker()
             if clicker_response is None:
                 return "ERROR"
-            
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionlist clicker_response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionlist response: {clicker_response}")
             
             for vision in clicker_response:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} vision: {vision}")
@@ -4780,18 +4879,19 @@ class GaeaDailyTask:
                         for i in range(burn_attempts):
                             try:
                                 clicker_response = await self.visionburn_clicker(vision_id, cdkeys[i])
-                                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} clicker_response: {clicker_response}")
-                                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn response: {clicker_response} - vision: {vision_id} burn: {cdkeys[i]} - {i+1}/{burn_attempts}")
+                                if clicker_response is None:
+                                    continue
+                                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn response: {clicker_response} - vision: {vision_id} burn: {cdkeys[i]} - {i+1}/{burn_attempts}")
                             except Exception as e:
                                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: {str(e)}")
                                 # 继续执行下一个任务而不是中断整个流程
                                 continue
                             
-                            delay = random.randint(60, 90)
+                            delay = random.randint(60, 90) # visionburn
                             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn delay: {delay} seconds")
                             await asyncio.sleep(delay)
             
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Vision burn completed")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Vision burn completed")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_visionburn except: {error}")
@@ -4804,16 +4904,13 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
-                return "ERROR"
-            
             # -------------------------------------------------------------------------- session
             clicker_response = await self.session_clicker() # visionclaim
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4826,18 +4923,19 @@ class GaeaDailyTask:
             clicker_response = await self.visionlist_clicker()
             if clicker_response is None:
                 return "ERROR"
-            
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionlist clicker_response: {clicker_response}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionlist response: {clicker_response}")
             
             for vision in clicker_response:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} vision: {vision}")
                 vision_id = int(vision['id'])
-                # -------------------------------------------------------------------------- visionclaimed
-                clicker_response = await self.visionclaimed_clicker()
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed response: {clicker_response} - vision_id: {vision_id}")
+                # -------------------------------------------------------------------------- visionclaim
+                clicker_response = await self.visionclaim_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim response: {clicker_response} - vision_id: {vision_id}")
 
-                delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # visionclaimed
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaimed delay: {delay} seconds")
+                delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # visionclaim
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim delay: {delay} seconds")
                 await asyncio.sleep(delay)
             
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Vision claimed completed")
@@ -4862,11 +4960,12 @@ class GaeaDailyTask:
                 raise Exception("POOLING_ADDRESS is Null")
             
             # -------------------------------------------------------------------------- session
-            clicker_response = await self.session_clicker()
+            clicker_response = await self.session_clicker() # funds_pooling
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -4876,12 +4975,19 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- funds_pooling
-            clicker_response = await self.funds_pooling_clicker()
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling clicker_response: {clicker_response}")
+            clicker_response = await self.funds_pooling_clicker(eth_address)
+            if clicker_response is None:
+                return "ERROR"
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling response: {clicker_response}")
 
-            delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # funds_pooling
+            # if clicker_response>0:
+            #     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # funds_pooling
+            #     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling delay: {delay} seconds")
+            #     await asyncio.sleep(delay)
+            delay = random.randint(60, 90) # funds_pooling
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling delay: {delay} seconds")
             await asyncio.sleep(delay)
+            
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_fundspooling except: {error}")
@@ -4898,6 +5004,7 @@ class GaeaDailyTask:
             clicker_response = await self.dailylist_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist response: {clicker_response}")
             
             delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailylist delay: {delay} seconds")
@@ -4922,9 +5029,8 @@ class GaeaDailyTask:
                 clicker_response = await self.dailycheckin_clicker(daily)
                 if clicker_response is None:
                     return "ERROR"
-                
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin response: {clicker_response}")
-            return "SUCCESS"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} dailycheckin response: {clicker_response}")
+                return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_dailycheckin except: {error}")
             return f"ERROR: {error}"
@@ -4940,15 +5046,20 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # medalcheckin
             if clicker_response is None:
                 return "ERROR"
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medal: {clicker_response['medal']} medal_expired: {((clicker_response['medal_expired']-int(time.time()))/60/60/24 if clicker_response['medal'] else 0):.2f} days")
-
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - medal: {clicker_response['medal']} medal_expired: {((clicker_response['medal_expired']-int(time.time()))/60/60/24 if clicker_response['medal'] else 0):.2f} days")
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
             # --------------------------------------------------------------------------
             if clicker_response['medal']:
                 # -------------------------------------------------------------------------- 2 medalcheckin
                 clicker_response = await self.medalcheckin_clicker()
                 if clicker_response is None:
                     return "ERROR"
-                
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medalcheckin response: {clicker_response}")
             return "SUCCESS"
         except Exception as error:
@@ -4966,33 +5077,51 @@ class GaeaDailyTask:
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist response: {clicker_response}")
+            
             if len(clicker_response['today']) > 0:
                 emotion_detail = clicker_response['today']
                 emotion = emotion_detail.split('_')[0]
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AI Training already completed")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AITrain already completed")
                 # return "SUCCESS"
             else:
-                # -------------------------------------------------------------------------- godhoodinfo
-                clicker_response = await self.godhoodinfo_clicker()
+                # -------------------------------------------------------------------------- godhoodinfo is_godhood_id
+                clicker_response = await self.godhoodinfo_clicker() # is_godhood_id
                 if clicker_response is None:
                     return "ERROR"
-                is_godhood_id = "0"
-                if clicker_response['mood']:
-                    is_godhood_id = "1"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response['mood']}")
+
+                is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
                 delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
-                # -------------------------------------------------------------------------- 3 aitraincheckin
+                # -------------------------------------------------------------------------- 3 aitrain
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
+                elif emotion == '9':
+                    # -------------------------------------------------------------------------- emotionperiod
+                    clicker_response = await self.emotionperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod period_id: {period_id}")
+                    emotion = get_emotion_for_txt(period_id)
+                    if emotion == '0' or emotion == '':
+                        return "ERROR"
+                    os.environ['CHOOSE_EMOTION'] = emotion
                 emotion_detail=emotion+'_1_'+is_godhood_id
-                clicker_response = await self.aitraincheckin_clicker(emotion_detail)
+                clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
-                
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
+
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AITrain successfully! - emotion: {emotion_detail}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_aitrain except: {error}")
@@ -5010,6 +5139,7 @@ class GaeaDailyTask:
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist response: {clicker_response}")
             
             if len(clicker_response['today']) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
@@ -5040,7 +5170,6 @@ class GaeaDailyTask:
                 clicker_response = await self.traincheckin_clicker()
                 if clicker_response is None:
                     return "ERROR"
-                
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin response: {clicker_response}")
                 return "SUCCESS"
         except Exception as error:
@@ -5062,8 +5191,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # deeptrain
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -5075,43 +5205,68 @@ class GaeaDailyTask:
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist response: {clicker_response}")
             
             if len(clicker_response['today']) > 0:
                 emotion_detail = clicker_response['today']
                 emotion = emotion_detail.split('_')[0]
             else:
-                # -------------------------------------------------------------------------- godhoodinfo
-                clicker_response = await self.godhoodinfo_clicker()
+                # -------------------------------------------------------------------------- godhoodinfo is_godhood_id
+                clicker_response = await self.godhoodinfo_clicker() # is_godhood_id
                 if clicker_response is None:
                     return "ERROR"
-                is_godhood_id = "0"
-                if clicker_response['mood']:
-                    is_godhood_id = "1"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response['mood']}")
+                
+                is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
                 delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
-                # -------------------------------------------------------------------------- 3 aitraincheckin
+                # -------------------------------------------------------------------------- 3 aitrain
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
+                elif emotion == '9':
+                    # -------------------------------------------------------------------------- emotionperiod
+                    clicker_response = await self.emotionperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod period_id: {period_id}")
+                    emotion = get_emotion_for_txt(period_id)
+                    if emotion == '0' or emotion == '':
+                        return "ERROR"
+                    os.environ['CHOOSE_EMOTION'] = emotion
                 emotion_detail=emotion+'_1_'+is_godhood_id
-                clicker_response = await self.aitraincheckin_clicker(emotion_detail)
+                clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
-                # logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
                 # return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain emotion: {emotion_detail}")
             
             delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- isdeeptrain
-            clicker_response =  await self.is_deeptrain_clicker()
+            clicker_response = await self.is_deeptrain_clicker(eth_address)
             if clicker_response is False:
                 # -------------------------------------------------------------------------- 5 deeptrain
-                await self.deeptrain_clicker(emotion, eth_address)
-
+                await self.deeptrain_clicker(emotion_detail, eth_address)
+                
+                delay = random.randint(60, 90) # deeptrain
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 deeptrain delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- traincheckin
+                clicker_response = await self.traincheckin_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin response: {clicker_response}")
+                
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deeptrain except: {error}")
@@ -5128,8 +5283,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # tickettrain
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -5141,47 +5297,63 @@ class GaeaDailyTask:
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist response: {clicker_response}")
             
             if len(clicker_response['today']) > 0:
                 emotion_detail = clicker_response['today']
                 emotion = emotion_detail.split('_')[0]
             else:
-                # -------------------------------------------------------------------------- godhoodinfo
-                clicker_response = await self.godhoodinfo_clicker()
+                # -------------------------------------------------------------------------- godhoodinfo is_godhood_id
+                clicker_response = await self.godhoodinfo_clicker() # is_godhood_id
                 if clicker_response is None:
                     return "ERROR"
-                is_godhood_id = "0"
-                if clicker_response['mood']:
-                    is_godhood_id = "1"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response['mood']}")
+                
+                is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
                 delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
-                # -------------------------------------------------------------------------- 3 aitraincheckin
+                # -------------------------------------------------------------------------- 3 aitrain
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
+                elif emotion == '9':
+                    # -------------------------------------------------------------------------- emotionperiod
+                    clicker_response = await self.emotionperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod period_id: {period_id}")
+                    emotion = get_emotion_for_txt(period_id)
+                    if emotion == '0' or emotion == '':
+                        return "ERROR"
+                    os.environ['CHOOSE_EMOTION'] = emotion
                 emotion_detail=emotion+'_1_'+is_godhood_id
-                clicker_response = await self.aitraincheckin_clicker(emotion_detail)
+                clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
-                # logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain response: {clicker_response}")
                 # return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} aitrain emotion: {emotion_detail}")
             
             delay = random.randint(10, 20)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- isdeeptrain
-            clicker_response =  await self.is_deeptrain_clicker()
+            clicker_response = await self.is_deeptrain_clicker(eth_address)
             if clicker_response is False:
                 # -------------------------------------------------------------------------- ticketbox_list
-                clicker_response = await self.ticketbox_list_clicker()
-                if clicker_response is None:
+                ticket_response = await self.ticketbox_list_clicker()
+                if ticket_response is None:
                     return "ERROR"
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {clicker_response}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {ticket_response}")
                 
-                cdkeys = clicker_response.get("cdkeys", [])
+                cdkeys = ticket_response.get("cdkeys", [])
                 if len(cdkeys) == 0:
                     logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
                     return "ERROR"
@@ -5194,9 +5366,16 @@ class GaeaDailyTask:
                 if clicker_response is None:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tickettrain response: {clicker_response}")
-            
-                delay = random.randint(60, 90)
+
+                delay = random.randint(60, 90) # ticket_deeptrain
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain delay: {delay} seconds")
+                await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- traincheckin
+                clicker_response = await self.traincheckin_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin response: {clicker_response}")
+                
                 await asyncio.sleep(delay)
             return "SUCCESS"
         except Exception as error:
@@ -5218,8 +5397,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # deepchoice
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -5228,23 +5408,41 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- isdeepchoice
-            clicker_response =  await self.is_deepchoice_clicker()
+            clicker_response = await self.is_deepchoice_clicker(eth_address)
             if clicker_response is False:
-                # -------------------------------------------------------------------------- godhoodinfo
-                clicker_response = await self.godhoodinfo_clicker()
+                # -------------------------------------------------------------------------- godhoodinfo is_godhood_id
+                clicker_response = await self.godhoodinfo_clicker() # is_godhood_id
                 if clicker_response is None:
                     return "ERROR"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response['mood']}")
+                
                 is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
-                delay = random.randint(60, 90)
+                delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- 
                 choice=os.environ.get('CHOOSE_CHOICE', '0')
                 if choice == '0':
                     # choice = random.choice(["1", "2", "3", "4"])
                     options = await self.deepchoice_list_clicker()
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice options: {options}")
                     choice = random.choice(options)
+                elif choice == '9':
+                    # -------------------------------------------------------------------------- choiceperiod
+                    clicker_response = await self.choiceperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod response: {clicker_response}")
+                    
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod period_id: {period_id}")
+                    choice = get_choice_for_txt(period_id)
+                    if choice == '0' or choice == '':
+                        return "ERROR"
+                    os.environ['CHOOSE_CHOICE'] = choice
                 choice_detail=f"{choice}_{delay}_{is_godhood_id}"
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
                 # -------------------------------------------------------------------------- 5 deepchoice
@@ -5266,8 +5464,9 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # ticketchoice
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
             if eth_address is None and eth_address == "":
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
@@ -5276,15 +5475,15 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
             await asyncio.sleep(delay)
             # -------------------------------------------------------------------------- 5 tickettrain
-            clicker_response =  await self.is_deepchoice_clicker()
+            clicker_response = await self.is_deepchoice_clicker(eth_address)
             if clicker_response is False:
                 # -------------------------------------------------------------------------- ticketbox_list
-                clicker_response = await self.ticketbox_list_clicker()
-                if clicker_response is None:
+                ticket_response = await self.ticketbox_list_clicker()
+                if ticket_response is None:
                     return "ERROR"
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {clicker_response}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {ticket_response}")
                 
-                cdkeys = clicker_response.get("cdkeys", [])
+                cdkeys = ticket_response.get("cdkeys", [])
                 if len(cdkeys) == 0:
                     logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
                     return "ERROR"
@@ -5292,21 +5491,39 @@ class GaeaDailyTask:
                 delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list delay: {delay} seconds")
                 await asyncio.sleep(delay)
-                # -------------------------------------------------------------------------- godhoodinfo
-                clicker_response = await self.godhoodinfo_clicker()
+                # -------------------------------------------------------------------------- godhoodinfo is_godhood_id
+                clicker_response = await self.godhoodinfo_clicker() # is_godhood_id
                 if clicker_response is None:
                     return "ERROR"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response['mood']}")
+                
                 is_godhood_id = "1" if clicker_response['mood'] else "0"
                 
-                delay = random.randint(60, 90)
+                delay = random.randint(10, 20)
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
                 await asyncio.sleep(delay)
+                # -------------------------------------------------------------------------- 
                 choice=os.environ.get('CHOOSE_CHOICE', '0')
                 if choice == '0':
                     # choice = random.choice(["1", "2", "3", "4"])
                     options = await self.deepchoice_list_clicker()
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticket_deepchoice_clicker options: {options}")
                     choice = random.choice(options)
+                elif choice == '9':
+                    # -------------------------------------------------------------------------- choiceperiod
+                    clicker_response = await self.choiceperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod response: {clicker_response}")
+                    
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod period_id: {period_id}")
+                    choice = get_choice_for_txt(period_id)
+                    if choice == '0' or choice == '':
+                        return "ERROR"
+                    os.environ['CHOOSE_CHOICE'] = choice
                 choice_detail=f"{choice}_{delay}_{is_godhood_id}"
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
             
@@ -5316,7 +5533,7 @@ class GaeaDailyTask:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketchoice response: {clicker_response}")
 
-                delay = random.randint(60, 90)
+                delay = random.randint(60, 90) # ticket_deepchoice
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deepchoice delay: {delay} seconds")
                 await asyncio.sleep(delay)
             return "SUCCESS"
@@ -5331,20 +5548,6 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            # # -------------------------------------------------------------------------- 1 checkin
-            # await self.checkin_clicker()
-
-            # delay = random.randint(10, 20)
-            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 1 checkin delay: {delay} seconds")
-            # await asyncio.sleep(delay)
-
-            # # -------------------------------------------------------------------------- 2 signin
-            # await self.signin_clicker()
-
-            # delay = random.randint(10, 20)
-            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 signin delay: {delay} seconds")
-            # await asyncio.sleep(delay)
-
             # -------------------------------------------------------------------------- dailylist
             clicker_response = await self.dailylist_clicker()
             if clicker_response is None:
@@ -5381,11 +5584,14 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # alltask
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
             eth_address = clicker_response['eth_address']
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
+            if eth_address is None and eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                # return "ERROR"
 
-
-            # -------------------------------------------------------------------------- 
+            # -------------------------------------------------------------------------- medalcheckin
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} medal: {clicker_response['medal']} medal_expired: {((clicker_response['medal_expired']-int(time.time()))/60/60/24 if clicker_response['medal'] else 0):.2f} days")
             delay = random.randint(10, 20)
             await asyncio.sleep(delay)
@@ -5400,32 +5606,54 @@ class GaeaDailyTask:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 2 medalcheckin delay: {delay} seconds")
                 await asyncio.sleep(delay)
 
-
-            # -------------------------------------------------------------------------- ailist
+            task=os.environ.get('TASK_EMOTION', '0')
+            if task == '0':  # no aitrain
+                return "SUCCESS"
+            
+            # -------------------------------------------------------------------------- godhoodinfo is_godhood_id
+            clicker_response = await self.godhoodinfo_clicker() # is_godhood_id
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo response: {clicker_response['mood']}")
+            
+            is_godhood_id = "1" if clicker_response['mood'] else "0"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            # -------------------------------------------------------------------------- ailist aitrain
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist response: {clicker_response}")
+            
             if len(clicker_response['today']) > 0:
                 emotion_detail = clicker_response['today']
                 emotion = emotion_detail.split('_')[0]
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AI Training already completed")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} AITrain already completed")
                 # return "SUCCESS"
             else:
-                # -------------------------------------------------------------------------- godhoodinfo
-                clicker_response = await self.godhoodinfo_clicker()
-                if clicker_response is None:
-                    return "ERROR"
-                is_godhood_id = "1" if clicker_response['mood'] else "0"
-                
-                delay = random.randint(10, 20)
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
-                await asyncio.sleep(delay)
-                # -------------------------------------------------------------------------- 3 aitraincheckin
+                # -------------------------------------------------------------------------- 3 aitrain
                 emotion=os.environ.get('CHOOSE_EMOTION', '0')
                 if emotion == '0':
                     emotion = random.choice(["1", "2", "3"])
+                elif emotion == '9':
+                    # -------------------------------------------------------------------------- emotionperiod
+                    clicker_response = await self.emotionperiod_clicker()
+                    if clicker_response is None:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod response: {clicker_response}")
+                    
+                    period_id = int(clicker_response.get('id', 0))
+                    if period_id == 0:
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionperiod period_id: {period_id}")
+                    emotion = get_emotion_for_txt(period_id)
+                    if emotion == '0' or emotion == '':
+                        return "ERROR"
+                    # os.environ['CHOOSE_EMOTION'] = emotion
                 emotion_detail=emotion+'_1_'+is_godhood_id
-                clicker_response = await self.aitraincheckin_clicker(emotion_detail)
+                clicker_response = await self.aitrain_clicker(emotion_detail)
                 if clicker_response is None:
                     return "ERROR"
 
@@ -5433,51 +5661,28 @@ class GaeaDailyTask:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 3 aitrain delay: {delay} seconds")
                 await asyncio.sleep(delay)
 
-
-            # --------------------------------------------------------------------------
-            if eth_address is None and eth_address == "":
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
-                return "ERROR"
-
-            # -------------------------------------------------------------------------- ailist
-            clicker_response = await self.ailist_clicker()
-            if clicker_response is None:
-                return "ERROR"
-            
-            if len(clicker_response['today']) > 0:
-                emotion_detail = clicker_response['today']
-                emotion = emotion_detail.split('_')[0]
-            else:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
-                return "ERROR"
-            
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
-            await asyncio.sleep(delay)
-            # --------------------------------------------------------------------------
-            
             # -------------------------------------------------------------------------- deeptrain
-            clicker_response =  await self.is_deeptrain_clicker()
+            clicker_response = await self.is_deeptrain_clicker(eth_address)
             if clicker_response is False:
                 task=os.environ.get('TASK_EMOTION', '0')
-                if task == '0':  # no train
+                if task == '1':  # no train
                     return "SUCCESS"
-                elif task == '1':  # deeptrain
+                elif task == '2':  # deeptrain
                     # -------------------------------------------------------------------------- 4 deeptrain
                     if len(self.client.prikey) in [64,66]:
-                        await self.deeptrain_clicker(emotion, eth_address)
+                        await self.deeptrain_clicker(emotion_detail, eth_address)
 
-                        delay = random.randint(60, 90)
+                        delay = random.randint(60, 90) # deeptrain
                         logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deeptrain delay: {delay} seconds")
                         await asyncio.sleep(delay)
-                elif task == '2':  # tickettrain
+                elif task == '3':  # tickettrain
                     # -------------------------------------------------------------------------- ticketbox_list
-                    clicker_response = await self.ticketbox_list_clicker()
-                    if clicker_response is None:
+                    ticket_response = await self.ticketbox_list_clicker()
+                    if ticket_response is None:
                         return "ERROR"
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {clicker_response}")
-                    
-                    cdkeys = clicker_response.get("cdkeys", [])
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {ticket_response}")
+
+                    cdkeys = ticket_response.get("cdkeys", [])
                     if len(cdkeys) == 0:
                         logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
                         return "ERROR"
@@ -5491,15 +5696,16 @@ class GaeaDailyTask:
                         return "ERROR"
                     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tickettrain response: {clicker_response}")
                     
-                    delay = random.randint(60, 90)
+                    delay = random.randint(60, 90) # ticket_deeptrain
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deeptrain delay: {delay} seconds")
                     await asyncio.sleep(delay)
             
             today = time.strftime("%d/%m/%Y", time.localtime())
-            # -------------------------------------------------------------------------- ailist
+            # -------------------------------------------------------------------------- ailist traincheckin
             clicker_response = await self.ailist_clicker()
             if clicker_response is None:
                 return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist response: {clicker_response}")
             
             if len(clicker_response['today']) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please complete the aitraining first")
@@ -5526,48 +5732,54 @@ class GaeaDailyTask:
                 clicker_response = await self.traincheckin_clicker()
                 if clicker_response is None:
                     return "ERROR"
-
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin response: {clicker_response}")
 
-            # -------------------------------------------------------------------------- godhoodinfo
-            clicker_response = await self.godhoodinfo_clicker()
-            if clicker_response is None:
-                return "ERROR"
-            is_godhood_id = "1" if clicker_response['mood'] else "0"
-            
-            delay = random.randint(60, 90)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodinfo delay: {delay} seconds")
-            await asyncio.sleep(delay)
+            # --------------------------------------------------------------------------
             choice=os.environ.get('CHOOSE_CHOICE', '0')
             if choice == '0':
                 # choice = random.choice(["1", "2", "3", "4"])
                 options = await self.deepchoice_list_clicker()
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_deepchoice options: {options}")
                 choice = random.choice(options)
+            elif choice == '9':
+                # -------------------------------------------------------------------------- choiceperiod
+                clicker_response = await self.choiceperiod_clicker()
+                if clicker_response is None:
+                    return "ERROR"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod response: {clicker_response}")
+                
+                period_id = int(clicker_response.get('id', 0))
+                if period_id == 0:
+                    return "ERROR"
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod period_id: {period_id}")
+                choice = get_choice_for_txt(period_id)
+                if choice == '0' or choice == '':
+                    return "ERROR"
+                # os.environ['CHOOSE_CHOICE'] = choice
             choice_detail=f"{choice}_{delay}_{is_godhood_id}"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
             # -------------------------------------------------------------------------- deepchoice
-            clicker_response =  await self.is_deepchoice_clicker()
+            clicker_response = await self.is_deepchoice_clicker(eth_address)
             if clicker_response is False:
                 task=os.environ.get('TASK_CHOICE', '0')
-                if task == '0':  # no train
+                if task == '0':  # no choice
                     return "SUCCESS"
                 elif task == '1':  # deepchoice
                     # -------------------------------------------------------------------------- 4 deepchoice
                     if len(self.client.prikey) in [64,66]:
                         await self.deepchoice_clicker(choice_detail, eth_address)
 
-                        delay = random.randint(60, 90)
+                        delay = random.randint(60, 90) # deepchoice
                         logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 4 deepchoice delay: {delay} seconds")
                         await asyncio.sleep(delay)
                 elif task == '2':  # ticketchoice
                     # -------------------------------------------------------------------------- ticketbox_list
-                    clicker_response = await self.ticketbox_list_clicker()
-                    if clicker_response is None:
+                    ticket_response = await self.ticketbox_list_clicker()
+                    if ticket_response is None:
                         return "ERROR"
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {clicker_response}")
-                    
-                    cdkeys = clicker_response.get("cdkeys", [])
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketbox_list response: {ticket_response}")
+
+                    cdkeys = ticket_response.get("cdkeys", [])
                     if len(cdkeys) == 0:
                         logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} No ticket")
                         return "ERROR"
@@ -5581,7 +5793,7 @@ class GaeaDailyTask:
                         return "ERROR"
                     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ticketchoice response: {clicker_response}")
                     
-                    delay = random.randint(60, 90)
+                    delay = random.randint(60, 90) # ticket_deepchoice
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 5 ticket_deepchoice delay: {delay} seconds")
                     await asyncio.sleep(delay)
             

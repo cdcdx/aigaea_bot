@@ -4,8 +4,6 @@ import time
 from loguru import logger
 from utils.helpers import get_data_for_token
 from src.functions import (
-    gaea_clicker_checkin,
-    gaea_clicker_signin,
     gaea_clicker_dailycheckin,
     gaea_clicker_medalcheckin,
     gaea_clicker_aitrain,
@@ -24,7 +22,7 @@ class TaskManager:
         self.count = len(self.datas)
         self.lock = asyncio.Lock()
 
-    async def _launch_task(self, thread: int, runid: int, module_name: str, task_function) -> None:
+    async def _launch_task(self, thread: int, runeq: list, module_name: str, task_function) -> None:
         while True:
             try:
                 async with self.lock:
@@ -33,8 +31,8 @@ class TaskManager:
                     else:
                         data = self.datas.pop(0)
                         id = self.count - len(self.datas)
-                # Skip if runid is incorrect
-                if runid > 0 and id != runid:
+                # Skip if runeq is incorrect
+                if len(runeq) > 0 and id not in runeq:
                     continue
 
                 parts = data.split(',')
@@ -61,35 +59,29 @@ class TaskManager:
                 logger.error(f"An error occurred in {module_name}: {e}")
                 time.sleep(60)
 
-    async def launch_clicker_checkin(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_checkin)
+    async def launch_clicker_dailycheckin(self, thread: int, runeq: list, module_name: str) -> None:
+        await self._launch_task(thread, runeq, module_name, gaea_clicker_dailycheckin)
 
-    async def launch_clicker_signin(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_signin)
+    async def launch_clicker_medalcheckin(self, thread: int, runeq: list, module_name: str) -> None:
+        await self._launch_task(thread, runeq, module_name, gaea_clicker_medalcheckin)
 
-    async def launch_clicker_dailycheckin(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_dailycheckin)
+    async def launch_clicker_aitrain(self, thread: int, runeq: list, module_name: str) -> None:
+        await self._launch_task(thread, runeq, module_name, gaea_clicker_aitrain)
 
-    async def launch_clicker_medalcheckin(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_medalcheckin)
+    async def launch_clicker_deeptrain(self, thread: int, runeq: list, module_name: str) -> None:
+        await self._launch_task(thread, runeq, module_name, gaea_clicker_deeptrain)
 
-    async def launch_clicker_aitrain(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_aitrain)
+    async def launch_clicker_tickettrain(self, thread: int, runeq: list, module_name: str) -> None:
+        await self._launch_task(thread, runeq, module_name, gaea_clicker_tickettrain)
 
-    async def launch_clicker_traincheckin(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_traincheckin)
+    async def launch_clicker_traincheckin(self, thread: int, runeq: list, module_name: str) -> None:
+        await self._launch_task(thread, runeq, module_name, gaea_clicker_traincheckin)
 
-    async def launch_clicker_deeptrain(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_deeptrain)
+    async def launch_clicker_deepchoice(self, thread: int, runeq: list, module_name: str) -> None:
+        await self._launch_task(thread, runeq, module_name, gaea_clicker_deepchoice)
 
-    async def launch_clicker_tickettrain(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_tickettrain)
+    async def launch_clicker_ticketchoice(self, thread: int, runeq: list, module_name: str) -> None:
+        await self._launch_task(thread, runeq, module_name, gaea_clicker_ticketchoice)
 
-    async def launch_clicker_deepchoice(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_deepchoice)
-
-    async def launch_clicker_ticketchoice(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_ticketchoice)
-
-    async def launch_clicker_alltask(self, thread: int, runid: int, module_name: str) -> None:
-        await self._launch_task(thread, runid, module_name, gaea_clicker_alltask)
+    async def launch_clicker_alltask(self, thread: int, runeq: list, module_name: str) -> None:
+        await self._launch_task(thread, runeq, module_name, gaea_clicker_alltask)
