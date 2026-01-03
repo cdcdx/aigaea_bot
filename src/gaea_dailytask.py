@@ -3286,7 +3286,68 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate_clicker except: {error}")
 
     ## 汇聚
-    async def funds_pooling_clicker(self, eth_address) -> None:
+    async def fundsreward_clicker(self, eth_address) -> None:
+        try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                self.client.token = login_response.get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = login_response.get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+            
+            # -------------------------------------------------------------------------- balanceOf
+            web3_obj = self._web3_instance
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            if sender_balance_eth == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
+                return "ERRRO"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
+
+            # USDC合约地址
+            usdc_address = Web3.to_checksum_address(CONTRACT_USDC)
+            usdc_contract = web3_obj.eth.contract(address=usdc_address, abi=contract_abi_usdc)
+            # SXP合约地址
+            sxp_address = Web3.to_checksum_address(CONTRACT_SXP)
+            sxp_contract = web3_obj.eth.contract(address=sxp_address, abi=contract_abi_usdc)
+
+            # USDC账户余额
+            sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_usdc: {sender_balance_usdc}")
+            sender_usdc = web3_obj.from_wei(sender_balance_usdc, 'mwei')
+            logger.debug(f"sender_usdc: {sender_usdc}")
+            # SXP账户余额
+            sender_balance_sxp = sxp_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_sxp: {sender_balance_sxp}")
+            sender_sxp = web3_obj.from_wei(sender_balance_sxp, 'mwei')
+            logger.debug(f"sender_sxp: {sender_sxp}")
+
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {sender_usdc} sxp: {sender_sxp}")
+
+            # if sender_usdc < 5.0: # 余额大于5USDC显示绿色
+            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} sender_usdc: {sender_usdc}")
+            # else:
+            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} sender_usdc: {sender_usdc}")
+            return sender_usdc # 'SUCCESS'
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundsreward_clicker except: {error}")
+            return 0
+
+    async def fundspooling_clicker(self, eth_address) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker ERROR: Incorrect private key")
@@ -3337,7 +3398,7 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Incorrect pooling address")
                 raise Exception(f"Incorrect pooling address")
             pooling_address = Web3.to_checksum_address(pooling_addr)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} pooling_address: {pooling_address}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} pooling_address: {pooling_address}")
             
             # USDC账户余额
             sender_balance_usdc = usdc_contract.functions.balanceOf(sender_address).call()
@@ -3366,7 +3427,7 @@ class GaeaDailyTask:
             # logger.debug(f"sender_balance_sxp: {sender_balance_sxp}")
             # sender_sxp = web3_obj.from_wei(sender_balance_sxp, 'mwei')
             # logger.debug(f"sender_sxp: {sender_sxp}")
-            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - sxp: {web3_obj.from_wei(sender_balance_sxp, 'mwei')}")
+            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - sxp: {sender_sxp}")
             # time.sleep(1)
             # if 100000000 < sender_balance_sxp and pooling_addr != '': # 大于100开始归集SXP
             #     # 使用公共函数构建基础交易参数
@@ -3385,7 +3446,7 @@ class GaeaDailyTask:
             
             return sender_usdc
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundspooling_clicker except: {error}")
             return 0
 
     # -------------------------------------------------------------------------- 过期任务
@@ -4881,7 +4942,7 @@ class GaeaDailyTask:
                                 clicker_response = await self.visionburn_clicker(vision_id, cdkeys[i])
                                 if clicker_response is None:
                                     continue
-                                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn response: {clicker_response} - vision: {vision_id} burn: {cdkeys[i]} - {i+1}/{burn_attempts}")
+                                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionburn response: {clicker_response} - vision: {vision_id} burn: {cdkeys[i]} - {burn_user+i+1}/{burn_user+burn_attempts}")
                             except Exception as e:
                                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: {str(e)}")
                                 # 继续执行下一个任务而不是中断整个流程
@@ -4945,6 +5006,51 @@ class GaeaDailyTask:
             return f"ERROR: {error}"
 
     @helper
+    async def daily_clicker_fundsreward(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            if len(json.loads(POOLING_ADDRESS)) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} POOLING_ADDRESS is Null")
+                raise Exception("POOLING_ADDRESS is Null")
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker() # fundsreward
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
+            eth_address = clicker_response['eth_address']
+            if eth_address is None and eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
+            # -------------------------------------------------------------------------- fundsreward
+            clicker_response = await self.fundsreward_clicker(eth_address)
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundsreward response: {clicker_response}")
+            
+            if clicker_response < 5.0: # 余额大于5USDC显示绿色
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
+            else:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_fundsreward except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
     async def daily_clicker_fundspooling(self):
         try:
             if len(self.client.token) == 0:
@@ -4960,7 +5066,7 @@ class GaeaDailyTask:
                 raise Exception("POOLING_ADDRESS is Null")
             
             # -------------------------------------------------------------------------- session
-            clicker_response = await self.session_clicker() # funds_pooling
+            clicker_response = await self.session_clicker() # fundspooling
             if clicker_response is None:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
@@ -4974,18 +5080,18 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
             await asyncio.sleep(delay)
             
-            # -------------------------------------------------------------------------- funds_pooling
-            clicker_response = await self.funds_pooling_clicker(eth_address)
+            # -------------------------------------------------------------------------- fundspooling
+            clicker_response = await self.fundspooling_clicker(eth_address)
             if clicker_response is None:
                 return "ERROR"
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling response: {clicker_response}")
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundspooling response: {clicker_response}")
 
             # if clicker_response>0:
-            #     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # funds_pooling
-            #     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling delay: {delay} seconds")
+            #     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # fundspooling
+            #     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundspooling delay: {delay} seconds")
             #     await asyncio.sleep(delay)
-            delay = random.randint(60, 90) # funds_pooling
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} funds_pooling delay: {delay} seconds")
+            delay = random.randint(60, 90) # fundspooling
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundspooling delay: {delay} seconds")
             await asyncio.sleep(delay)
             
             return "SUCCESS"
