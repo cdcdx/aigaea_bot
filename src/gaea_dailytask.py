@@ -3347,7 +3347,7 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundsreward_clicker except: {error}")
             return 0
 
-    async def fundspooling_clicker(self, eth_address) -> None:
+    async def fundspooling_clicker(self, eth_address, is_all=False) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftmint_clicker ERROR: Incorrect private key")
@@ -3408,10 +3408,16 @@ class GaeaDailyTask:
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {sender_usdc}")
             time.sleep(1)
             if 10000000 < sender_balance_usdc and pooling_addr != '': # 大于10开始归集USDC
+                if is_all: # 归集全部USDC
+                    balance_usdc = sender_balance_usdc
+                else: # 归集大于5的USDC
+                    balance_usdc = sender_balance_usdc - sender_balance_usdc%5000000
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - balance_usdc: {balance_usdc}")
+                
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
                 # 构建交易 - 转账
-                transaction = usdc_contract.functions.transfer(pooling_address, sender_balance_usdc).build_transaction(base_transaction)
+                transaction = usdc_contract.functions.transfer(pooling_address, balance_usdc).build_transaction(base_transaction)
                 logger.debug(f"transfer transaction: {transaction}")
 
                 # 发送交易
@@ -3420,7 +3426,7 @@ class GaeaDailyTask:
                     logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                     raise Exception("Failed to send_transaction.")
 
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction send successfully! - usdc: {sender_usdc}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction send successfully! - usdc: {balance_usdc/1_000_000}")
             
             # # SXP账户余额
             # sender_balance_sxp = sxp_contract.functions.balanceOf(sender_address).call()
@@ -5051,7 +5057,7 @@ class GaeaDailyTask:
             return f"ERROR: {error}"
 
     @helper
-    async def daily_clicker_fundspooling(self):
+    async def daily_clicker_fundspooling(self, is_all=False):
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
@@ -5081,7 +5087,7 @@ class GaeaDailyTask:
             await asyncio.sleep(delay)
             
             # -------------------------------------------------------------------------- fundspooling
-            clicker_response = await self.fundspooling_clicker(eth_address)
+            clicker_response = await self.fundspooling_clicker(eth_address, is_all)
             if clicker_response is None:
                 return "ERROR"
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundspooling response: {clicker_response}")
@@ -5549,7 +5555,8 @@ class GaeaDailyTask:
                     if choice == '0' or choice == '':
                         return "ERROR"
                     os.environ['CHOOSE_CHOICE'] = choice
-                choice_detail=f"{choice}_{delay}_{is_godhood_id}"
+                vote_soul=random.randint(60, 180)
+                choice_detail=f"{choice}_{vote_soul}_{is_godhood_id}"
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
                 # -------------------------------------------------------------------------- 5 deepchoice
                 await self.deepchoice_clicker(choice_detail, eth_address)
@@ -5630,7 +5637,8 @@ class GaeaDailyTask:
                     if choice == '0' or choice == '':
                         return "ERROR"
                     os.environ['CHOOSE_CHOICE'] = choice
-                choice_detail=f"{choice}_{delay}_{is_godhood_id}"
+                vote_soul=random.randint(60, 180)
+                choice_detail=f"{choice}_{vote_soul}_{is_godhood_id}"
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
             
                 # -------------------------------------------------------------------------- ticket_deepchoice
@@ -5831,7 +5839,7 @@ class GaeaDailyTask:
                 # return "SUCCESS"
             else:
                 delay = random.randint(10, 20)
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin delay: {delay} seconds")
                 await asyncio.sleep(delay)
                 
                 # -------------------------------------------------------------------------- 5 traincheckin
@@ -5840,6 +5848,9 @@ class GaeaDailyTask:
                     return "ERROR"
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} traincheckin response: {clicker_response}")
 
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ailist delay: {delay} seconds")
+            await asyncio.sleep(delay)
             # --------------------------------------------------------------------------
             choice=os.environ.get('CHOOSE_CHOICE', '0')
             if choice == '0':
@@ -5862,7 +5873,8 @@ class GaeaDailyTask:
                 if choice == '0' or choice == '':
                     return "ERROR"
                 # os.environ['CHOOSE_CHOICE'] = choice
-            choice_detail=f"{choice}_{delay}_{is_godhood_id}"
+            vote_soul=random.randint(60, 180)
+            choice_detail=f"{choice}_{vote_soul}_{is_godhood_id}"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choice_detail: {choice_detail}")
             # -------------------------------------------------------------------------- deepchoice
             clicker_response = await self.is_deepchoice_clicker(eth_address)
