@@ -632,7 +632,7 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
             # 钱包地址
-            sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            sender_address = Web3().eth.account.from_key(self.client.prikey).address
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
 
             # -------------------------------------------------------------------------- bind_address
@@ -1849,7 +1849,7 @@ class GaeaDailyTask:
     async def godhoodemotion_clicker(self, eth_address) -> None:
         try:
             # # 钱包地址
-            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # sender_address = Web3().eth.account.from_key(self.client.prikey).address
             # 钱包地址
             sender_address = Web3.to_checksum_address(eth_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
@@ -1915,7 +1915,7 @@ class GaeaDailyTask:
             headers = self.getheaders()
 
             # # 钱包地址
-            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # sender_address = Web3().eth.account.from_key(self.client.prikey).address
             # 钱包地址
             sender_address = Web3.to_checksum_address(eth_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
@@ -1960,7 +1960,7 @@ class GaeaDailyTask:
     async def godhoodreward_clicker(self, eth_address) -> None:
         try:
             # # 钱包地址
-            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # sender_address = Web3().eth.account.from_key(self.client.prikey).address
             # 钱包地址
             sender_address = Web3.to_checksum_address(eth_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
@@ -2193,7 +2193,7 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
             # # 钱包地址
-            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # sender_address = Web3().eth.account.from_key(self.client.prikey).address
             # 钱包地址
             sender_address = Web3.to_checksum_address(eth_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
@@ -2438,7 +2438,7 @@ class GaeaDailyTask:
     async def emotionreward_clicker(self, eth_address) -> None:
         try:
             # # 钱包地址
-            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # sender_address = Web3().eth.account.from_key(self.client.prikey).address
             # 钱包地址
             sender_address = Web3.to_checksum_address(eth_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
@@ -2578,7 +2578,7 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
             # # 钱包地址
-            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # sender_address = Web3().eth.account.from_key(self.client.prikey).address
             # 钱包地址
             sender_address = Web3.to_checksum_address(eth_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
@@ -2775,7 +2775,7 @@ class GaeaDailyTask:
     async def choicereward_clicker(self, eth_address) -> None:
         try:
             # # 钱包地址
-            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # sender_address = Web3().eth.account.from_key(self.client.prikey).address
             # 钱包地址
             sender_address = Web3.to_checksum_address(eth_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
@@ -2870,7 +2870,7 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
             # # 钱包地址
-            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # sender_address = Web3().eth.account.from_key(self.client.prikey).address
             # 钱包地址
             sender_address = Web3.to_checksum_address(eth_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
@@ -3090,7 +3090,7 @@ class GaeaDailyTask:
                 set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
             
             # # 钱包地址
-            # sender_address = Web3.eth.account.from_key(self.client.prikey).address
+            # sender_address = Web3().eth.account.from_key(self.client.prikey).address
             # 钱包地址
             sender_address = Web3.to_checksum_address(eth_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
@@ -3843,7 +3843,7 @@ class GaeaDailyTask:
             clicker_response = await self.session_clicker() # bindaddress
             if clicker_response is None:
                 return "ERROR"
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {clicker_response['eth_address']}")
             
             eth_address = clicker_response['eth_address']
             if eth_address is not None and eth_address != "":
@@ -5793,7 +5793,7 @@ class GaeaDailyTask:
                 await asyncio.sleep(delay)
             
             if eth_address is None or eth_address == "":
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                # logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
             
             # -------------------------------------------------------------------------- deeptrain
