@@ -2613,12 +2613,12 @@ class GaeaDailyTask:
                 raise Exception(f"Incorrect private key")
             
             choice_int = choice_detail.split('_')[0]
-            soul_int = choice_detail.split('_')[0]
-            
             choice_int = int(choice_int)
             if choice_int not in [1,2,3,4]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker ERROR: Wrong choice_int: {choice_int}")
                 raise Exception(f'Wrong choice_int: {choice_int}')
+            
+            soul_int = choice_detail.split('_')[1]
             soul_int = int(soul_int)
             
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} deepchoice_clicker choice_int: {choice_int}")
