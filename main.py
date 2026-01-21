@@ -14,7 +14,8 @@ from termcolor import cprint
 
 from src.functions import (
     gaea_clicker_register, gaea_clicker_login, 
-    gaea_clicker_session, gaea_clicker_bindaddress, 
+    gaea_clicker_session, 
+    gaea_clicker_address, gaea_clicker_bindaddress, 
     gaea_clicker_openblindbox, gaea_clicker_buytickets,
     gaea_clicker_earninfo, 
     gaea_clicker_era3info, gaea_clicker_referralreword,
@@ -26,6 +27,7 @@ from src.functions import (
     gaea_clicker_choicereward, gaea_clicker_choiceclaimed,
     gaea_clicker_snftmint, gaea_clicker_snftinfo, gaea_clicker_snftoblate,
     gaea_clicker_anftmint, gaea_clicker_anftinfo, gaea_clicker_anftoblate,
+    gaea_clicker_fourmemenftmint,
     gaea_clicker_missionconnect, gaea_clicker_missioncomplete,
     gaea_clicker_milestoneburn, gaea_clicker_milestoneclaim,
     gaea_clicker_visionburn, gaea_clicker_visionclaim,
@@ -47,6 +49,7 @@ MODULE_MAPPING = {
     'gaea_clicker_register':          gaea_clicker_register,
     'gaea_clicker_login':             gaea_clicker_login,
     'gaea_clicker_session':           gaea_clicker_session,
+    'gaea_clicker_address':           gaea_clicker_address,
     'gaea_clicker_bindaddress':       gaea_clicker_bindaddress,
     'gaea_clicker_openblindbox':      gaea_clicker_openblindbox,
     'gaea_clicker_buytickets':        gaea_clicker_buytickets,
@@ -70,6 +73,7 @@ MODULE_MAPPING = {
     'gaea_clicker_anftmint':          gaea_clicker_anftmint,
     'gaea_clicker_anftinfo':          gaea_clicker_anftinfo,
     'gaea_clicker_anftoblate':        gaea_clicker_anftoblate,
+    'gaea_clicker_fourmemenftmint':   gaea_clicker_fourmemenftmint,
     'gaea_clicker_missionconnect':    gaea_clicker_missionconnect,
     'gaea_clicker_missioncomplete':   gaea_clicker_missioncomplete,
     'gaea_clicker_milestoneburn':     gaea_clicker_milestoneburn,
@@ -276,11 +280,12 @@ def handle_basic_tasks(runname, runeq, rungt, runlt, runthread):
             Choice("🚀 Basic tasks - register",                     'gaea_clicker_register',           shortcut_key="1"),
             Choice("🚀 Basic tasks - login",                        'gaea_clicker_login',              shortcut_key="2"),
             Choice("🚀 Basic tasks - session",                      'gaea_clicker_session',            shortcut_key="3"),
-            Choice("🔥 Basic tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="4"),
-            Choice("🔥 Basic tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="5"),
-            Choice("🔥 Basic tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="6"),
-            Choice("🔥 Basic tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="7"), # 第三纪信息 - era3
-            # Choice("🔥 Basic tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="8"), # 邀请奖励
+            Choice("🚀 Basic tasks - address",                      'gaea_clicker_address',            shortcut_key="4"),
+            Choice("🔥 Basic tasks - bindaddress",                  'gaea_clicker_bindaddress',        shortcut_key="5"),
+            Choice("🔥 Basic tasks - openblindbox",                 'gaea_clicker_openblindbox',       shortcut_key="6"),
+            Choice("🔥 Basic tasks - earninfo",                     'gaea_clicker_earninfo',           shortcut_key="7"),
+            Choice("🔥 Basic tasks - era3info",                     'gaea_clicker_era3info',           shortcut_key="8"), # 第三纪信息 - era3
+            # Choice("🔥 Basic tasks - referralreword",               'gaea_clicker_referralreword',     shortcut_key="9"), # 邀请奖励
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
@@ -324,6 +329,7 @@ def handle_nfts_tasks(runname, runeq, rungt, runlt, runthread):
             Choice("🐌 NFTs tasks - anftmint",                     'gaea_clicker_anftmint',           shortcut_key="4"),
             Choice("🔥 NFTs tasks - anftinfo",                     'gaea_clicker_anftinfo',           shortcut_key="5"),
             Choice("🐌 NFTs tasks - anftoblate   (🈷️)",            'gaea_clicker_anftoblate',         shortcut_key="6"),
+            Choice("🔥 NFTs tasks - fourmemenftmint",              'gaea_clicker_fourmemenftmint',    shortcut_key="7"),
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,

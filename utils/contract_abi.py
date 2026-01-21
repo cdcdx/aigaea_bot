@@ -454,6 +454,29 @@ contract_abi_mint = [
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address","name": "addr","type": "address"}
+        ],
+        "name": "isMinted",
+        "outputs": [
+            {"internalType": "uint256","name": "","type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            { "internalType": "uint8", "name": "nftId", "type": "uint8" },
+            { "internalType": "uint256", "name": "_ticket", "type": "uint256" },
+            { "internalType": "uint256", "name": "_number", "type": "uint256" },
+            { "internalType": "bytes", "name": "_finalhash", "type": "bytes" }
+        ],
+        "name": "purchase",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
     }
 ]
 

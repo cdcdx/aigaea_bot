@@ -23,6 +23,7 @@ def set_envsion(key, value, format=True):
 
 # GAEA
 GAEA_API = os.getenv("GAEA_API", default="https://api.aigaea.net")
+FOURMEME_API = os.getenv("FOURMEME_API", default="https://apimeme.aigaea.net")
 # DELAY
 SNAIL_UNIT = int(os.getenv("SNAIL_UNIT", default=1800))  # 延迟单位，秒
 
@@ -56,3 +57,7 @@ CONTRACT_CHOICE=os.getenv("CONTRACT_CHOICE", default="0x8817ac79bA24E60cf812916A
 CONTRACT_AWARD=os.getenv("CONTRACT_AWARD", default="0x325BD1751eE8E84fE6c77e4543adD95857EAE1b5")
 CONTRACT_SNFTMINT=os.getenv("CONTRACT_SNFTMINT", default="0xdc37b93628719778663d5ac36d2171ce471a9b7e")
 CONTRACT_ANFTMINT=os.getenv("CONTRACT_ANFTMINT", default="0x1ac341d729e01c271Db3B8bCfD2e26172439f614")
+
+BNB_WEB3_RPC=os.getenv("BNB_WEB3_RPC", default="")
+BNB_CHAINID=int(os.getenv("BNB_CHAINID", default=56))
+BNB_FOURMEMENFTMINT=os.getenv("BNB_FOURMEMENFTMINT", default="")
