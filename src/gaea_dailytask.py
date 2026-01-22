@@ -22,7 +22,7 @@ from utils.services import get_captcha_key, generate_random_groups
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, EMOTION3_ONLINE_STAMP, SNAIL_UNIT
 from config import CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS, POOLING_ADDRESS
 from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_TICKET, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT
-from config import FOURMEME_API, BNB_WEB3_RPC, BNB_CHAINID, BNB_FOURMEMENFTMINT
+from config import LAUREL_API, BNB_WEB3_RPC, BNB_CHAINID, BNB_LNFTMINT
 
 def connect_web3_rpc():
     """
@@ -3299,8 +3299,8 @@ class GaeaDailyTask:
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} anftoblate_clicker except: {error}")
 
-    ## NFT fourmemenft
-    async def fourmemenft_ismint_clicker(self, eth_address) -> int:
+    ## NFT laurelnft
+    async def laurelnft_ismint_clicker(self, eth_address) -> int:
         try:
             # # 钱包地址
             # sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -3308,7 +3308,7 @@ class GaeaDailyTask:
             sender_address = Web3.to_checksum_address(eth_address)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]}")
 
-            # -------------------------------------------------------------------------- is_fourmemenftmint
+            # -------------------------------------------------------------------------- is_laurelnftmint
             web3_obj = Web3(Web3.HTTPProvider(BNB_WEB3_RPC))
             if not BNB_WEB3_RPC:
                 raise Exception("Web3 rpc not found")
@@ -3323,63 +3323,63 @@ class GaeaDailyTask:
             logger.debug(f"current_timestamp: {current_timestamp}")
 
             # NFT合约地址
-            fourmemenftmint_address = Web3.to_checksum_address(BNB_FOURMEMENFTMINT)
-            fourmemenftmint_contract = web3_obj.eth.contract(address=fourmemenftmint_address, abi=contract_abi_mint)
+            laurelnftmint_address = Web3.to_checksum_address(BNB_LNFTMINT)
+            laurelnftmint_contract = web3_obj.eth.contract(address=laurelnftmint_address, abi=contract_abi_mint)
 
             # 当前NFT等级
-            current_tokenId = fourmemenftmint_contract.functions.isMinted(sender_address).call()
+            current_tokenId = laurelnftmint_contract.functions.isMinted(sender_address).call()
             logger.debug(f"current_tokenId: {current_tokenId}")
             time.sleep(1)
 
-            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenft mint already completed | current_tokenId: {current_tokenId}")
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnft mint already completed | current_tokenId: {current_tokenId}")
             return current_tokenId
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenft_ismint_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnft_ismint_clicker except: {error}")
             return -1
 
-    async def fourmemenft_generate_clicker(self, eth_address) -> None:
+    async def laurelnft_generate_clicker(self, eth_address) -> None:
         try:
             headers = self.getheaders()
             headers["Authorization"] = f"Bearer {eth_address}"
             # -------------------------------------------------------------------------- generate
-            url = FOURMEME_API.rstrip('/')+'/api/nft/generate'
+            url = LAUREL_API.rstrip('/')+'/api/nft/generate'
 
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenft_generate_clicker url: {url}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnft_generate_clicker url: {url}")
             response = await self.client.make_request(
                 method='GET', 
                 url=url, 
                 headers=headers,
             )
             if 'ERROR' in response:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenft_generate_clicker {response}")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnft_generate_clicker {response}")
                 raise Exception(response)
-            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenft_generate_clicker {response}")
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnft_generate_clicker {response}")
 
             code = response.get('code', None)
             if code in [200, 201]:
-                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenft_generate_clicker => {response['data']}")
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnft_generate_clicker => {response['data']}")
                 return response['data']
             else:
                 message = response.get('msg', None)
                 if message is None:
                     message = f"{response.get('detail', None)}" 
                 if message.find('completed') > 0:
-                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenft_generate_clicker => {message}")
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnft_generate_clicker => {message}")
                     return message
                 else:
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenft_generate_clicker ERROR: {message}")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnft_generate_clicker ERROR: {message}")
                     raise Exception(message)
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenft_generate_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnft_generate_clicker except: {error}")
 
-    async def fourmemenftmint_clicker(self, eth_address, nft_zone, nft_number, final_hash) -> None:
+    async def laurelnftmint_clicker(self, eth_address, nft_zone, nft_number, final_hash) -> None:
         try:
             if len(self.client.prikey) not in [64,66]:
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenftmint_clicker ERROR: Incorrect private key")
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftmint_clicker ERROR: Incorrect private key")
                 raise Exception(f"Incorrect private key")
             
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenftmint_clicker eth_address: {eth_address[:10]}")
-            # -------------------------------------------------------------------------- fourmemenftmint
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftmint_clicker eth_address: {eth_address[:10]}")
+            # -------------------------------------------------------------------------- laurelnftmint
             web3_obj = Web3(Web3.HTTPProvider(BNB_WEB3_RPC))
             if not BNB_WEB3_RPC:
                 raise Exception("Web3 rpc not found")
@@ -3405,11 +3405,11 @@ class GaeaDailyTask:
                 raise Exception("Does not match the binding address.")
 
             # NFT铸造合约地址
-            fourmemenftmint_address = Web3.to_checksum_address(BNB_FOURMEMENFTMINT)
-            fourmemenftmint_contract = web3_obj.eth.contract(address=fourmemenftmint_address, abi=contract_abi_mint)
+            laurelnftmint_address = Web3.to_checksum_address(BNB_LNFTMINT)
+            laurelnftmint_contract = web3_obj.eth.contract(address=laurelnftmint_address, abi=contract_abi_mint)
 
             # 当前NFT等级
-            current_tokenId = fourmemenftmint_contract.functions.isMinted(sender_address).call()
+            current_tokenId = laurelnftmint_contract.functions.isMinted(sender_address).call()
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} current_tokenId: {current_tokenId}")
             if current_tokenId>0:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} current_tokenId: {current_tokenId} | NFT already minted.")
@@ -3417,11 +3417,11 @@ class GaeaDailyTask:
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, BNB_CHAINID)
             # 构建交易 - 铸造
-            transaction = fourmemenftmint_contract.functions.purchase(1, nft_zone,nft_number,final_hash).build_transaction(base_transaction)
+            transaction = laurelnftmint_contract.functions.purchase(1, nft_zone,nft_number,final_hash).build_transaction(base_transaction)
             logger.debug(f"purchase transaction: {transaction}")
 
             # 发送交易
-            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # fourmemenftmint.purchase
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # laurelnftmint.purchase
             if tx_success == False:
                 logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
                 raise Exception("Failed to send_transaction.")
@@ -3429,7 +3429,7 @@ class GaeaDailyTask:
             logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The purchase transaction send successfully! - current_tokenId: {current_tokenId} nft_zone: {nft_zone}")
             return "SUCCESS"
         except Exception as error:
-            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenftmint_clicker except: {error}")
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftmint_clicker except: {error}")
             return "ERROR"
 
     ## 汇聚
@@ -4893,7 +4893,7 @@ class GaeaDailyTask:
             return f"ERROR: {error}"
 
     @helper
-    async def daily_clicker_fourmemenftmint(self):
+    async def daily_clicker_laurelnftmint(self):
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
@@ -4904,7 +4904,7 @@ class GaeaDailyTask:
                 return "ERROR"
             
             # -------------------------------------------------------------------------- session
-            clicker_response = await self.session_clicker() # fourmemenftmint
+            clicker_response = await self.session_clicker() # laurelnftmint
             if clicker_response is None:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
@@ -4918,36 +4918,36 @@ class GaeaDailyTask:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
             await asyncio.sleep(delay)
             
-            # -------------------------------------------------------------------------- fourmemenftmint
-            nfttokenId = await self.fourmemenft_ismint_clicker(eth_address)
+            # -------------------------------------------------------------------------- laurelnftmint
+            nfttokenId = await self.laurelnft_ismint_clicker(eth_address)
             if nfttokenId > 0: # 已铸造
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | NFT already minted.")
                 return "SUCCESS"
             elif nfttokenId==0: # 可铸造
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | Start minting NFT")
                 # -------------------------------------------------------------------------- generate
-                clicker_response = await self.fourmemenft_generate_clicker(eth_address)
+                clicker_response = await self.laurelnft_generate_clicker(eth_address)
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenftgenerate response: {clicker_response}")  # {'zone': 3, 'number': 33203269, 'final_hash': '0x46fcb058ce'}
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftgenerate response: {clicker_response}")  # {'zone': 3, 'number': 33203269, 'final_hash': '0x46fcb058ce'}
                 if len(self.client.prikey) in [64,66]:
                     nft_zone = clicker_response['zone']
                     nft_number = clicker_response['number']
                     final_hash = clicker_response['final_hash']
-                    # -------------------------------------------------------------------------- fourmemenftmint
-                    response = await self.fourmemenftmint_clicker(eth_address, nft_zone, nft_number, final_hash)
+                    # -------------------------------------------------------------------------- laurelnftmint
+                    response = await self.laurelnftmint_clicker(eth_address, nft_zone, nft_number, final_hash)
                     if response == 'SUCCESS':
-                        delay = random.randint(600, 600*2) # fourmemenftmint
+                        delay = random.randint(600, 600*2) # laurelnftmint
                     else:
                         delay = random.randint(10, 20)
-                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fourmemenftmint delay: {delay} seconds")
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftmint delay: {delay} seconds")
                     await asyncio.sleep(delay)
             else:
                 raise Exception("nfttokenId error")
             
             return "SUCCESS"
         except Exception as error:
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_fourmemenftmint except: {error}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_laurelnftmint except: {error}")
             return f"ERROR: {error}"
 
     @helper
