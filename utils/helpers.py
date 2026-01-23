@@ -1,7 +1,10 @@
-import hashlib
-import json
-import sys
 import os
+import re
+import sys
+import json
+import hashlib
+import time
+from jose import jwt
 
 def sha256(data):
     hash_object = hashlib.sha256()
@@ -136,6 +139,26 @@ def get_choice_for_txt(period_id):
         print(f"ERROR: Column {x_pos} is out of range in line {line_pos}")
         return 0
     return line_elements[x_pos]
+
+# ----------------------------------------------------------------------------------------------------------
+
+def is_valid_jwt_format(token):
+    """检查JWT格式是否正确"""
+    if len(token) > 20 and len(token.split('.')) == 3 and (re.match(r'^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$', token)):  # token
+        return True
+    return False
+
+def is_token_valid(token):
+    """验证token是否有效（未过期）"""
+    try:
+        payload = jwt.get_unverified_claims(token)
+        # print(f"payload: {payload}")
+        current_timestamp = int(time.time())
+        expire = payload.get("expire")
+        return expire is not None and expire > current_timestamp
+    except Exception as e:
+        print(f"is_token_valid error: {e}")
+        return False
 
 if __name__ == '__main__':
     print("emotion:"+get_emotion_for_txt(20))

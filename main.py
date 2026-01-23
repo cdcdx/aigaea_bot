@@ -41,7 +41,7 @@ from src.functions import (
 )
 from src.gaea_client import GaeaClient
 from src.task_manager import TaskManager
-from utils.helpers import get_data_for_token
+from utils.helpers import get_data_for_token, set_data_for_token, is_valid_jwt_format, is_token_valid
 from utils.services import resolve_domain, get_web3_config, choose_emotion, choose_task_emotion, choose_choice, choose_task_choice, input_ticket, random_ticket, choose_ticket_level
 from config import set_envsion, GAEA_API
 
@@ -177,6 +177,17 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
         elif not (re.findall(PASSWD_REGEX_PATTERN, passwd)):  # passwd
             logger.error(f"Invalid password - {passwd}")
             continue
+        elif token:  # token
+            if not is_valid_jwt_format(token): # 验证token格式
+                token = ''
+                set_data_for_token(runname, data_id, token)
+                logger.error(f"Invalid token - {data_id}")
+                continue
+            elif not is_token_valid(token): # 验证token是否过期
+                token = ''
+                set_data_for_token(runname, data_id, token)
+                logger.error(f"Invalid token - {data_id}")
+                continue
         elif proxy == 'proxy':
             logger.error(f"Invalid proxy: {proxy}")
             continue

@@ -17,6 +17,7 @@ from web3.middleware import ExtraDataToPOAMiddleware
 from src.gaea_client import GaeaClient
 from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_emotion3, contract_abi_reward, contract_abi_reward3, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award, contract_abi_ticket
 from utils.decorators import helper
+from utils.helpers import is_valid_jwt_format, is_token_valid
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid, get_emotion_for_txt, get_choice_for_txt
 from utils.services import get_captcha_key, generate_random_groups
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, EMOTION3_ONLINE_STAMP, SNAIL_UNIT
@@ -567,6 +568,12 @@ class GaeaDailyTask:
             code = response.get('code', None)
             if code in [200, 201]:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                
+                self.client.token = response['data'].get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = response['data'].get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                
                 return response['data']
             else:
                 message = response.get('msg', None)
@@ -587,10 +594,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- session
             url = GAEA_API.rstrip('/')+'/api/auth/session'
 
@@ -628,10 +634,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # 钱包地址
             sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -679,10 +684,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- earninfo
             url = GAEA_API.rstrip('/')+'/api/earn/info'
 
@@ -720,10 +724,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- godhoodinfo
             url = GAEA_API.rstrip('/')+'/api/godhood/info'
 
@@ -761,10 +764,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- godhoodgrowthinfo
             url = GAEA_API.rstrip('/')+'/api/godhood/growth/info'
 
@@ -802,10 +804,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- era3info
             url = GAEA_API.rstrip('/')+'/api/ranking/era3?page=1&limit=20'
 
@@ -843,10 +844,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- blindbox_list
             url = GAEA_API.rstrip('/')+'/api/godhood/blindbox/list'
 
@@ -892,10 +892,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- blindbox_open
             url = GAEA_API.rstrip('/')+'/api/godhood/blindbox/open'
             json_data = {
@@ -938,10 +937,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- ticketbox_list
             url = GAEA_API.rstrip('/')+'/api/ticket/list'
 
@@ -994,10 +992,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- dailylist
             url = GAEA_API.rstrip('/')+'/api/reward/daily-list'
 
@@ -1035,10 +1032,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- dailycheckin
             url = GAEA_API.rstrip('/')+'/api/reward/daily-complete'
             # weekday = dt.now().weekday() + 1
@@ -1086,10 +1082,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- medalcheckin
             url = GAEA_API.rstrip('/')+'/api/medal/complete'
             json_data = {}
@@ -1131,10 +1126,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- ailist
             url = GAEA_API.rstrip('/')+'/api/ai/list'
 
@@ -1174,10 +1168,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- aitrain
             url = GAEA_API.rstrip('/')+'/api/ai/complete'
             json_data = {
@@ -1220,10 +1213,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- traincheckin
             url = GAEA_API.rstrip('/')+'/api/ai/complete-mission'
             json_data = { }
@@ -1265,10 +1257,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- emotionperiod
             url = GAEA_API.rstrip('/')+'/api/emotion/period'
             json_data = {
@@ -1310,10 +1301,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- choiceperiod
             url = GAEA_API.rstrip('/')+'/api/choice/period'
             json_data = {
@@ -1358,10 +1348,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- missionlist
             url = GAEA_API.rstrip('/')+'/api/mission/list'
 
@@ -1399,10 +1388,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- missionconnect
             if 10 < int(mission_id) < 99:
                 url = GAEA_API.rstrip('/')+'/api/auth/retweet/connect?id='+str(mission_id)
@@ -1444,10 +1432,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- missioncomplete
             url = GAEA_API.rstrip('/')+'/api/mission/complete-mission'
             json_data = {
@@ -1491,10 +1478,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- milestonelist
             url = GAEA_API.rstrip('/')+'/api/milestone/list'
 
@@ -1532,10 +1518,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- milestoneburn
             url = GAEA_API.rstrip('/')+'/api/milestone/burn'
             json_data = {
@@ -1578,10 +1563,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- milestoneclaim
             url = GAEA_API.rstrip('/')+f'/api/milestone/claim/{milestoneid}/{taskid}'
 
@@ -1620,10 +1604,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- visionlist
             url = GAEA_API.rstrip('/')+'/api/vision/list'
 
@@ -1661,10 +1644,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- visionburn
             chat_datas = generate_random_groups()
             
@@ -1711,10 +1693,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- visionclaim
             url = GAEA_API.rstrip('/')+f'/api/vision/claimed'
 
@@ -2050,10 +2031,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- ticketbox_generate
             url = GAEA_API.rstrip('/')+'/api/ticket/generate?level='+str(level)
 
@@ -2189,10 +2169,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # # 钱包地址
             # sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -2395,10 +2374,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- ticket_deeptrain
             url = GAEA_API.rstrip('/')+'/api/emotion/complete'
             json_data = {
@@ -2538,10 +2516,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # -------------------------------------------------------------------------- deepchoice_list
             web3_obj = self._web3_instance
@@ -2574,10 +2551,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # # 钱包地址
             # sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -2732,10 +2708,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- ticket_deepchoice
             url = GAEA_API.rstrip('/')+'/api/choice/complete'
             json_data = {
@@ -2866,10 +2841,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # # 钱包地址
             # sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -2904,10 +2878,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- generate
             url = GAEA_API.rstrip('/')+'/api/nft/generate'
 
@@ -2998,10 +2971,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- snftlist
             url = GAEA_API.rstrip('/')+'/api/nft/list'
 
@@ -3039,10 +3011,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- snftoblate
             url = GAEA_API.rstrip('/')+'/api/nft/claimed'
             json_data = {
@@ -3086,10 +3057,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # # 钱包地址
             # sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -3124,10 +3094,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- generate
             url = GAEA_API.rstrip('/')+'/api/nft/anniversary/generate'
 
@@ -3218,10 +3187,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- anftlist
             url = GAEA_API.rstrip('/')+'/api/nft/anniversary/list'
 
@@ -3259,10 +3227,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- anftoblate
             url = GAEA_API.rstrip('/')+'/api/nft/anniversary/claimed'
             json_data = {
@@ -3443,10 +3410,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # -------------------------------------------------------------------------- balanceOf
             web3_obj = self._web3_instance
@@ -3504,10 +3470,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # -------------------------------------------------------------------------- balanceOf
             web3_obj = self._web3_instance
@@ -3610,10 +3575,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- checkin
             url = GAEA_API.rstrip('/')+'/api/mission/complete-mission'
             json_data = {
@@ -3656,10 +3620,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- signin
             url = GAEA_API.rstrip('/')+'/api/signin/complete'
             json_data = {
@@ -3702,10 +3665,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- referral_list
             url = GAEA_API.rstrip('/')+'/api/reward/referral-list'
 
@@ -3743,10 +3705,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- referral_complete
             url = GAEA_API.rstrip('/')+'/api/reward/referral-complete'
 
@@ -3883,22 +3844,18 @@ class GaeaDailyTask:
     @helper
     async def daily_clicker_login(self):
         try:
-            if len(self.client.token) > 5:
+            if is_valid_jwt_format(self.client.token) and is_token_valid(self.client.token): # 验证token格式 验证token是否过期
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Already login")
                 return "SUCCESS"
             
             # -------------------------------------------------------------------------- login
             clicker_response = await self.login_clicker()
-            if clicker_response is None:
-                return "ERROR"
+            if len(clicker_response) > 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {clicker_response}")
+                raise Exception(clicker_response)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login response: {clicker_response}")
             
-            self.client.token = clicker_response.get('token', None)
-            set_data_for_token(self.client.runname, self.client.id, self.client.token)
-            self.client.userid = clicker_response.get('user_info', None).get('uid', None)
-            set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
-
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Login successfully - userinfo: {clicker_response['user_info']}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Login successfully - userid: {self.client.userid}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_login except: {error}")
