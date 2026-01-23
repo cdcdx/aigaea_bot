@@ -152,7 +152,7 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
         # runthread = sum(1 for id, _ in enumerate(datas, start=1) if is_id_valid(id, runeq, rungt, runlt))
         runthread = sum(1 for id, _ in enumerate(data_pairs , start=1) if is_id_valid(id, runeq, rungt, runlt)) # datas随机乱序
         # logger.debug(f"runthread: {runthread}")
-    runthread = min(runthread, 10)
+    runthread = max(runthread, 1)
     logger.info(f"runname: {runname} runthread: {runthread}")
     semaphore = asyncio.Semaphore(runthread)
 
@@ -493,7 +493,7 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--equal', nargs='+', type=int, default=[])
     parser.add_argument('-g', '--greater', type=int, default=0)
     parser.add_argument('-l', '--less', type=int, default=0)
-    parser.add_argument('-t', '--thread', type=int, default=0)
+    parser.add_argument('-t', '--thread', type=int, default=10)
     args = parser.parse_args()
     run_auto = bool(args.auto)
     run_run = int(args.run)

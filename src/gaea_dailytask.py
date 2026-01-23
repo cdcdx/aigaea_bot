@@ -3850,7 +3850,7 @@ class GaeaDailyTask:
             
             # -------------------------------------------------------------------------- login
             clicker_response = await self.login_clicker()
-            if len(clicker_response) > 0:
+            if len(clicker_response.get('token','')) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {clicker_response}")
                 raise Exception(clicker_response)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login response: {clicker_response}")
