@@ -4860,27 +4860,17 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
             
-            # -------------------------------------------------------------------------- session
-            clicker_response = await self.session_clicker() # laurelnftmint
-            if clicker_response is None:
-                return "ERROR"
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
-            
-            eth_address = clicker_response['eth_address']
-            if eth_address is None or eth_address == "":
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
-                return "ERROR"
-            
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
-            await asyncio.sleep(delay)
+            # --------------------------------------------------------------------------
+            # 钱包地址
+            eth_address = Web3().eth.account.from_key(self.client.prikey).address
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {eth_address[:10]}")
             
             # -------------------------------------------------------------------------- laurelnftmint
             nfttokenId = await self.laurelnft_ismint_clicker(eth_address)
             if nfttokenId > 0: # 已铸造
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | NFT already minted.")
                 return "SUCCESS"
-            elif nfttokenId==0: # 可铸造
+            elif nfttokenId==0: # 未铸造
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | Start minting NFT")
                 # -------------------------------------------------------------------------- generate
                 clicker_response = await self.laurelnft_generate_clicker(eth_address)
@@ -4905,6 +4895,40 @@ class GaeaDailyTask:
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_laurelnftmint except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_laurelnftinfo(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker() # laurelnftinfo
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
+            eth_address = clicker_response['eth_address']
+            if eth_address is None or eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
+            
+            # -------------------------------------------------------------------------- laurelnftinfo
+            nfttokenId = await self.laurelnft_ismint_clicker(eth_address)
+            if nfttokenId > 0: # 已铸造
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | NFT already minted.")
+                return "SUCCESS"
+            elif nfttokenId==0: # 未铸造
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | No NFT")
+                return "SUCCESS"
+            else:
+                raise Exception("nfttokenId error")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_laurelnftinfo except: {error}")
             return f"ERROR: {error}"
 
     @helper

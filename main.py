@@ -27,7 +27,7 @@ from src.functions import (
     gaea_clicker_choicereward, gaea_clicker_choiceclaimed,
     gaea_clicker_snftmint, gaea_clicker_snftinfo, gaea_clicker_snftoblate,
     gaea_clicker_anftmint, gaea_clicker_anftinfo, gaea_clicker_anftoblate,
-    gaea_clicker_laurelnftmint,
+    gaea_clicker_laurelnftmint, gaea_clicker_laurelnftinfo,
     gaea_clicker_missionconnect, gaea_clicker_missioncomplete,
     gaea_clicker_milestoneburn, gaea_clicker_milestoneclaim,
     gaea_clicker_visionburn, gaea_clicker_visionclaim,
@@ -74,6 +74,7 @@ MODULE_MAPPING = {
     'gaea_clicker_anftinfo':          gaea_clicker_anftinfo,
     'gaea_clicker_anftoblate':        gaea_clicker_anftoblate,
     'gaea_clicker_laurelnftmint':     gaea_clicker_laurelnftmint,
+    'gaea_clicker_laurelnftinfo':     gaea_clicker_laurelnftinfo,
     'gaea_clicker_missionconnect':    gaea_clicker_missionconnect,
     'gaea_clicker_missioncomplete':   gaea_clicker_missioncomplete,
     'gaea_clicker_milestoneburn':     gaea_clicker_milestoneburn,
@@ -140,13 +141,18 @@ async def gaea_run_module_multiple_times(module, count, runname, id, email, pass
     logger.debug(f"id: {id} userid: {userid} email: {email} account delay: {delay} seconds")
     await asyncio.sleep(delay)
 
-async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
+async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread, runshuffle):
     datas = get_data_for_token(runname)
     logger.info(f"runname: {runname} runeq: {runeq} rungt: {rungt} runlt: {runlt}")
 
-    # datas随机乱序
-    data_pairs = list(enumerate(datas, start=1))
-    random.shuffle(data_pairs)
+    # 根据 runshuffle 是否随机乱序
+    if runshuffle>0:
+        # datas随机乱序
+        data_pairs = list(enumerate(datas, start=1))
+        random.shuffle(data_pairs)
+    else:
+        # 保持原始顺序
+        data_pairs = list(enumerate(datas, start=1))
 
     if runthread<=0:
         # runthread = sum(1 for id, _ in enumerate(datas, start=1) if is_id_valid(id, runeq, rungt, runlt))
@@ -217,7 +223,7 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread):
     except Exception as e:
         logger.error(f"Error occurred while running tasks: {e}")
 
-def run_module(module, runname, runeq, rungt, runlt, runthread):
+def run_module(module, runname, runeq, rungt, runlt, runthread, runshuffle):
     if module in [gaea_clicker_aitrain, gaea_clicker_deeptrain, gaea_clicker_tickettrain, gaea_clicker_alltask]:
         emotion = choose_emotion()
         os.environ['CHOOSE_EMOTION'] = emotion
@@ -242,11 +248,11 @@ def run_module(module, runname, runeq, rungt, runlt, runthread):
         ticket_level = choose_ticket_level()
         os.environ['TICKET_LEVEL'] = ticket_level
     
-    asyncio.run(gaea_run_modules(module=module, runname=runname, runeq=runeq, rungt=rungt, runlt=runlt, runthread=runthread))
+    asyncio.run(gaea_run_modules(module=module, runname=runname, runeq=runeq, rungt=rungt, runlt=runlt, runthread=runthread, runshuffle=runshuffle))
 
 # ---------------------------------------------------------------------------------------------------------- main
 
-def main(runname, runeq, rungt, runlt, runthread):
+def main(runname, runeq, rungt, runlt, runthread, runshuffle):
     try:
         while True:
             if platform.system().lower() == 'windows':
@@ -267,24 +273,24 @@ def main(runname, runeq, rungt, runlt, runthread):
             ).ask()
 
             if answer == 'basic_tasks':
-                handle_basic_tasks(runname, runeq, rungt, runlt, runthread)
+                handle_basic_tasks(runname, runeq, rungt, runlt, runthread, runshuffle)
             elif answer == 'godhood_tasks':
-                handle_godhood_tasks(runname, runeq, rungt, runlt, runthread)
+                handle_godhood_tasks(runname, runeq, rungt, runlt, runthread, runshuffle)
             elif answer == 'nfts_tasks':
-                handle_nfts_tasks(runname, runeq, rungt, runlt, runthread)
+                handle_nfts_tasks(runname, runeq, rungt, runlt, runthread, runshuffle)
             elif answer == 'daily_tasks':
-                handle_daily_tasks(runname, runeq, rungt, runlt, runthread)
+                handle_daily_tasks(runname, runeq, rungt, runlt, runthread, runshuffle)
             elif answer == 'advanced_tasks':
-                handle_advanced_tasks(runname, runeq, rungt, runlt, runthread)
+                handle_advanced_tasks(runname, runeq, rungt, runlt, runthread, runshuffle)
             elif answer == 'funds_tasks':
-                handle_funds_tasks(runname, runeq, rungt, runlt, runthread)
+                handle_funds_tasks(runname, runeq, rungt, runlt, runthread, runshuffle)
             elif answer == 'exit':
                 sys.exit()
     except (KeyboardInterrupt, asyncio.CancelledError, SystemExit) as e:
         cprint(f"\nShutting down due to: {type(e).__name__}", color='light_yellow')
         sys.exit()
 
-def handle_basic_tasks(runname, runeq, rungt, runlt, runthread):
+def handle_basic_tasks(runname, runeq, rungt, runlt, runthread, runshuffle):
     answer = select(
         'Basic Tasks',
         choices=[
@@ -304,11 +310,11 @@ def handle_basic_tasks(runname, runeq, rungt, runlt, runthread):
     ).ask()
 
     if answer in MODULE_MAPPING:
-        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread, runshuffle)
     elif answer == 'back':
         return
 
-def handle_godhood_tasks(runname, runeq, rungt, runlt, runthread):
+def handle_godhood_tasks(runname, runeq, rungt, runlt, runthread, runshuffle):
     answer = select(
         'GodHood Tasks',
         choices=[
@@ -326,11 +332,11 @@ def handle_godhood_tasks(runname, runeq, rungt, runlt, runthread):
     ).ask()
 
     if answer in MODULE_MAPPING:
-        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread, runshuffle)
     elif answer == 'back':
         return
 
-def handle_nfts_tasks(runname, runeq, rungt, runlt, runthread):
+def handle_nfts_tasks(runname, runeq, rungt, runlt, runthread, runshuffle):
     answer = select(
         'NFTs Tasks',
         choices=[
@@ -340,7 +346,8 @@ def handle_nfts_tasks(runname, runeq, rungt, runlt, runthread):
             Choice("🐌 NFTs tasks - anftmint",                     'gaea_clicker_anftmint',           shortcut_key="4"),
             Choice("🔥 NFTs tasks - anftinfo",                     'gaea_clicker_anftinfo',           shortcut_key="5"),
             Choice("🐌 NFTs tasks - anftoblate   (🈷️)",            'gaea_clicker_anftoblate',         shortcut_key="6"),
-            Choice("🔥 NFTs tasks - laurelnftmint",                'gaea_clicker_laurelnftmint',      shortcut_key="7"),
+            Choice("🐌 NFTs tasks - laurelnftmint",                'gaea_clicker_laurelnftmint',      shortcut_key="7"),
+            Choice("🔥 NFTs tasks - laurelnftinfo",                'gaea_clicker_laurelnftinfo',      shortcut_key="8"),
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,
@@ -348,11 +355,11 @@ def handle_nfts_tasks(runname, runeq, rungt, runlt, runthread):
     ).ask()
 
     if answer in MODULE_MAPPING:
-        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread, runshuffle)
     elif answer == 'back':
         return
 
-def handle_daily_tasks(runname, runeq, rungt, runlt, runthread):
+def handle_daily_tasks(runname, runeq, rungt, runlt, runthread, runshuffle):
     answer = select(
         'Daily Tasks',
         choices=[
@@ -374,11 +381,11 @@ def handle_daily_tasks(runname, runeq, rungt, runlt, runthread):
     ).ask()
 
     if answer in MODULE_MAPPING:
-        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread, runshuffle)
     elif answer == 'back':
         return
 
-def handle_advanced_tasks(runname, runeq, rungt, runlt, runthread):
+def handle_advanced_tasks(runname, runeq, rungt, runlt, runthread, runshuffle):
     answer = select(
         'Advanced Tasks',
         choices=[
@@ -395,11 +402,11 @@ def handle_advanced_tasks(runname, runeq, rungt, runlt, runthread):
     ).ask()
 
     if answer in MODULE_MAPPING:
-        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread, runshuffle)
     elif answer == 'back':
         return
 
-def handle_funds_tasks(runname, runeq, rungt, runlt, runthread):
+def handle_funds_tasks(runname, runeq, rungt, runlt, runthread, runshuffle):
     answer = select(
         'Funds Tasks',
         choices=[
@@ -418,13 +425,13 @@ def handle_funds_tasks(runname, runeq, rungt, runlt, runthread):
     ).ask()
 
     if answer in MODULE_MAPPING:
-        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread)
+        run_module(MODULE_MAPPING[answer], runname, runeq, rungt, runlt, runthread, runshuffle)
     elif answer == 'back':
         return
 
 # ---------------------------------------------------------------------------------------------------------- auto
 
-async def gaea_daily_task_modules(module, runname, runeq, runthread):
+async def gaea_daily_task_modules(module, runname, runeq, runthread, runshuffle):
     module_mapping = {
         gaea_clicker_dailycheckin:  "launch_clicker_dailycheckin",
         gaea_clicker_medalcheckin:  "launch_clicker_medalcheckin",
@@ -459,11 +466,11 @@ async def gaea_daily_task_modules(module, runname, runeq, runthread):
 
     await asyncio.gather(*tasks)
 
-def daily_task_module():
+def daily_task_module(run_shuffle):
     logger.info("Execute alltask scheduled task...")
-    asyncio.run(gaea_daily_task_modules(module=gaea_clicker_alltask, runname=run_name, runeq=run_eq, runthread=run_thread))
+    asyncio.run(gaea_daily_task_modules(module=gaea_clicker_alltask, runname=run_name, runeq=run_eq, runthread=run_thread, runshuffle=run_shuffle))
 
-def main_task(run_hour: int):
+def main_task(run_hour: int, run_shuffle):
     # 获取当前时间
     current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logger.info(f"current_time: {current_time}")
@@ -479,7 +486,7 @@ def main_task(run_hour: int):
     else:
         task_time = f"{str(run_hour).zfill(2)}:{str(random.randint(0, 59)).zfill(2)}"
     logger.info(f"The scheduled task will start at {task_time} every day ...")
-    schedule.every().day.at(task_time).do(daily_task_module)
+    schedule.every().day.at(task_time).do(daily_task_module, run_shuffle=run_shuffle)
 
 # ----------------------------------------------------------------------------------------------------------
 
@@ -493,7 +500,8 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--equal', nargs='+', type=int, default=[])
     parser.add_argument('-g', '--greater', type=int, default=0)
     parser.add_argument('-l', '--less', type=int, default=0)
-    parser.add_argument('-t', '--thread', type=int, default=10)
+    parser.add_argument('-t', '--thread', type=int, default=1)
+    parser.add_argument('-s', '--shuffle', type=int, default=1)
     args = parser.parse_args()
     run_auto = bool(args.auto)
     run_run = int(args.run)
@@ -503,6 +511,7 @@ if __name__ == '__main__':
     run_gt = int(args.greater)
     run_lt = int(args.less)
     run_thread = int(args.thread)
+    run_shuffle = int(args.shuffle)
 
     # 日志级别
     log_level = "DEBUG" if run_debug else "INFO"
@@ -528,7 +537,7 @@ if __name__ == '__main__':
         os.environ['TASK_CHOICE'] = task_choice
 
         if 0 <= run_run <= 23:
-            main_task(run_run)
+            main_task(run_run, run_shuffle)
         else:
             logger.error(f"Invalid parameter, run: {run_run} must be between 0 and 23.")
             sys.exit(1)
@@ -539,5 +548,5 @@ if __name__ == '__main__':
             time.sleep(1)
     else:
         logger.info("Start now ...")
-        main(run_name, run_eq, run_gt, run_lt, run_thread)
+        main(run_name, run_eq, run_gt, run_lt, run_thread, run_shuffle)
         logger.info("All wallets completed their tasks!")
