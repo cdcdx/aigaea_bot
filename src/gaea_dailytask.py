@@ -5967,6 +5967,9 @@ class GaeaDailyTask:
                 # logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
             
+            if task == '1':  # no deeptrain
+                return "SUCCESS"
+            
             # -------------------------------------------------------------------------- deeptrain
             clicker_response = await self.is_deeptrain_clicker(eth_address)
             if clicker_response is False:
