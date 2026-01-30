@@ -561,3 +561,40 @@ contract_abi_ticket = [
     }
 ]
 
+contract_abi_lottery = [
+    {
+        "inputs": [
+            { "internalType": "uint8", "name": "phaseId", "type": "uint8" },
+            { "internalType": "bytes", "name": "packedData", "type": "bytes" },
+            { "internalType": "bytes", "name": "signature", "type": "bytes" }
+        ],
+        "name": "lottery",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            { "internalType": "uint8", "name": "", "type": "uint8" },
+            { "internalType": "uint32", "name": "", "type": "uint32" }
+        ],
+        "name": "tokenRewards",
+        "outputs": [
+            { "internalType": "uint256", "name": "", "type": "uint256" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            { "internalType": "uint8", "name": "", "type": "uint8" },
+            { "internalType": "uint32", "name": "", "type": "uint32" }
+        ],
+        "name": "tokenUsed",
+        "outputs": [
+            { "internalType": "bool", "name": "", "type": "bool" }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]

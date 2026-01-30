@@ -15,7 +15,7 @@ from web3 import Web3
 from web3.middleware import ExtraDataToPOAMiddleware
 
 from src.gaea_client import GaeaClient
-from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_emotion3, contract_abi_reward, contract_abi_reward3, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award, contract_abi_ticket
+from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_emotion3, contract_abi_reward, contract_abi_reward3, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award, contract_abi_ticket, contract_abi_lottery
 from utils.decorators import helper
 from utils.helpers import is_valid_jwt_format, is_token_valid
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid, get_emotion_for_txt, get_choice_for_txt
@@ -23,7 +23,7 @@ from utils.services import get_captcha_key, generate_random_groups
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, EMOTION3_ONLINE_STAMP, SNAIL_UNIT
 from config import CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS, POOLING_ADDRESS
 from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_TICKET, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT
-from config import LAUREL_API, BNB_WEB3_RPC, BNB_CHAINID, BNB_LNFTMINT
+from config import LAUREL_API, BNB_WEB3_RPC, BNB_CHAINID, BNB_LNFTMINT, BNB_LNFTLOTTERY
 
 def connect_web3_rpc():
     """
@@ -3399,6 +3399,102 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftmint_clicker except: {error}")
             return "ERROR"
 
+    async def laurelnftlottery_generate_clicker(self, eth_address, phaseid, tokenid) -> None:
+        try:
+            headers = self.getheaders()
+            headers["Authorization"] = f"Bearer {eth_address}"
+            # -------------------------------------------------------------------------- lottery/generate/1
+            url = LAUREL_API.rstrip('/')+f'/api/nft/lottery/generate/{phaseid}/{tokenid}'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers,
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker {response}")
+                raise Exception(response)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker except: {error}")
+
+    async def laurelnftlottery_clicker(self, eth_address, phaseid, tokenid, packeddata, signature) -> None:
+        try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_clicker eth_address: {eth_address[:10]}")
+            # -------------------------------------------------------------------------- laurelnftmint
+            web3_obj = Web3(Web3.HTTPProvider(BNB_WEB3_RPC))
+            if not BNB_WEB3_RPC:
+                raise Exception("Web3 rpc not found")
+            if BNB_CHAINID in [56, 97]:
+                web3_obj.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+            # 连接rpc节点
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {BNB_WEB3_RPC}")
+                raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            if sender_balance_eth == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
+
+            # NFT抽奖合约地址
+            laurelnftlottery_address = Web3.to_checksum_address(BNB_LNFTLOTTERY)
+            laurelnftlottery_contract = web3_obj.eth.contract(address=laurelnftlottery_address, abi=contract_abi_lottery)
+
+            # 当前NFT等级
+            isUsed = laurelnftlottery_contract.functions.tokenUsed(phaseid, tokenid).call()
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} isUsed: {isUsed}")
+            if isUsed:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tokenid: {tokenid} | NFT already lottery")
+                return "ERROR"
+
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, BNB_CHAINID)
+            # 构建交易 - 抽奖
+            transaction = laurelnftlottery_contract.functions.lottery(phaseid, packeddata, signature).build_transaction(base_transaction)
+            logger.debug(f"lottery transaction: {transaction}")
+
+            # 发送交易
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # laurelnftlottery.lottery
+            if tx_success == False:
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
+                raise Exception("Failed to send_transaction.")
+
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The lottery transaction send successfully! - tokenid: {tokenid} packeddata: {packeddata}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_clicker except: {error}")
+            return "ERROR"
+
     ## 汇聚
     async def fundsreward_clicker(self, eth_address) -> None:
         try:
@@ -4850,6 +4946,40 @@ class GaeaDailyTask:
             return f"ERROR: {error}"
 
     @helper
+    async def daily_clicker_laurelnftinfo(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker() # laurelnftinfo
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
+            eth_address = clicker_response['eth_address']
+            if eth_address is None or eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
+            
+            # -------------------------------------------------------------------------- laurelnftinfo
+            nfttokenId = await self.laurelnft_ismint_clicker(eth_address)
+            if nfttokenId > 0: # 已铸造
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | NFT already minted.")
+                return "SUCCESS"
+            elif nfttokenId==0: # 未铸造
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | No NFT")
+                return "SUCCESS"
+            else:
+                raise Exception("nfttokenId error")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_laurelnftinfo except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
     async def daily_clicker_laurelnftmint(self):
         try:
             if len(self.client.token) == 0:
@@ -4898,37 +5028,49 @@ class GaeaDailyTask:
             return f"ERROR: {error}"
 
     @helper
-    async def daily_clicker_laurelnftinfo(self):
+    async def daily_clicker_laurelnftlottery(self):
         try:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
             
-            # -------------------------------------------------------------------------- session
-            clicker_response = await self.session_clicker() # laurelnftinfo
-            if clicker_response is None:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
             
-            eth_address = clicker_response['eth_address']
-            if eth_address is None or eth_address == "":
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
-                return "ERROR"
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
+            # --------------------------------------------------------------------------
+            # 钱包地址
+            eth_address = Web3().eth.account.from_key(self.client.prikey).address
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {eth_address[:10]}")
             
-            # -------------------------------------------------------------------------- laurelnftinfo
+            # -------------------------------------------------------------------------- laurelnftlottery
             nfttokenId = await self.laurelnft_ismint_clicker(eth_address)
-            if nfttokenId > 0: # 已铸造
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | NFT already minted.")
-                return "SUCCESS"
-            elif nfttokenId==0: # 未铸造
+            if nfttokenId==0: # 未铸造
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | No NFT")
                 return "SUCCESS"
+            elif nfttokenId > 0: # 已铸造
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | Start lottery")
+                # -------------------------------------------------------------------------- lottery_generate
+                clicker_response = await self.laurelnftlottery_generate_clicker(eth_address,1,nfttokenId)
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftgenerate response: {clicker_response}")  # {'phaseid': 1, 'packeddata': 33203269, 'signature': '0x46fcb058ce'}
+                if len(self.client.prikey) in [64,66]:
+                    packeddata = clicker_response['packeddata']
+                    signature = clicker_response['signature']
+                    # -------------------------------------------------------------------------- laurelnftlottery
+                    response = await self.laurelnftlottery_clicker(eth_address, 1, nfttokenId, packeddata, signature)
+                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery response: {response}")
+                    
+                    delay = random.randint(10, 20)
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery delay: {delay} seconds")
+                    await asyncio.sleep(delay)
             else:
                 raise Exception("nfttokenId error")
+            
             return "SUCCESS"
         except Exception as error:
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_laurelnftinfo except: {error}")
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_laurelnftlottery except: {error}")
             return f"ERROR: {error}"
 
     @helper

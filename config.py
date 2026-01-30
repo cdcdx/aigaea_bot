@@ -61,3 +61,4 @@ CONTRACT_ANFTMINT=os.getenv("CONTRACT_ANFTMINT", default="0x1ac341d729e01c271Db3
 BNB_WEB3_RPC=os.getenv("BNB_WEB3_RPC", default="")
 BNB_CHAINID=int(os.getenv("BNB_CHAINID", default=56))
 BNB_LNFTMINT=os.getenv("BNB_LNFTMINT", default="")
+BNB_LNFTLOTTERY=os.getenv("BNB_LNFTLOTTERY", default="")
