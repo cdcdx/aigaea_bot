@@ -1,6 +1,8 @@
 #!/bin/bash
-if [ ${#VIRTUAL_ENV} -gt 0 ]; then
-    deactivate
+if [ -n "$VIRTUAL_ENV" ]; then
+    if type deactivate >/dev/null 2>&1; then
+        deactivate || true
+    fi
 fi
 
 if [ "$1" == "init" ]; then
