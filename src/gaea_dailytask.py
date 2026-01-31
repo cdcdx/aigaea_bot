@@ -82,20 +82,61 @@ class TransactionHelper:
             "maxPriorityFeePerGas": priority_fee,
         }
 
-    def decode_revert_reason(self, hex_error):
+    def decode_revert_reason(self, input_data):
         """
-        解析 Solidity 合约的 revert 错误信息
+        解析 Solidity 合约的 revert 错误信息，支持多种输入格式
         
         Args:
-            hex_error: 16进制错误信息
+            input_data: 可能是16进制错误信息、包含错误信息的字符串或元组
             
         Returns:
             str: 解码后的错误信息
         """
         try:
+            # 处理不同类型的输入数据
+            hex_error = None
+            
+            if isinstance(input_data, tuple):
+                # 如果输入是元组，从中提取十六进制错误信息
+                for item in input_data:
+                    if isinstance(item, str) and item.startswith('0x') and len(item) > 10:
+                        hex_error = item
+                        break
+            elif isinstance(input_data, str):
+                if input_data.startswith('0x'):
+                    # 直接是十六进制字符串
+                    hex_error = input_data
+                else:
+                    # 字符串中可能包含十六进制错误信息
+                    # 查找其中的十六进制错误信息
+                    parts = input_data.split()
+                    for part in parts:
+                        if part.startswith('0x') and len(part) > 10:
+                            # 检查是否包含错误选择器
+                            check_str = part[2:] if part.startswith('0x') else part
+                            if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
+                                hex_error = part
+                                break
+            else:
+                # 其他类型转换为字符串处理
+                input_str = str(input_data)
+                if '0x' in input_str:
+                    # 从字符串中提取十六进制错误信息
+                    import re
+                    hex_matches = re.findall(r'0x[a-fA-F0-9]+', input_str)
+                    for match in hex_matches:
+                        check_str = match[2:]
+                        if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
+                            hex_error = match
+                            break
+            
+            if not hex_error:
+                return str(input_data)  # 如果没找到十六进制错误信息，返回原始数据
+            
             # 移除 '0x' 前缀
             if hex_error.startswith('0x'):
                 hex_error = hex_error[2:]
+            
             # 检查是否是标准的 Error(string) 选择器
             if hex_error.startswith('08c379a0'):
                 # 跳过选择器 (4 bytes = 8 hex chars)
@@ -110,10 +151,83 @@ class TransactionHelper:
                 message = bytes.fromhex(message_hex).decode('utf-8')
                 
                 return message
-            else:
-                return hex_error
+            # 检查是否是 Panic(uint256) 选择器
+            elif hex_error.startswith('4e487b71'):
+                # 跳过选择器 (4 bytes = 8 hex chars)
+                data = hex_error[8:]
+                
+                # Panic code 位于接下来的32字节
+                panic_code_hex = data[:64]
+                panic_code = int(panic_code_hex, 16)
+                
+                # Panic codes mapping
+                panic_codes = {
+                    0x00: "Generic compiler inserted panics",
+                    0x01: "Assert with an argument that evaluates to false",
+                    0x11: "Arithmetic operation results in underflow or overflow outside of an unchecked block",
+                    0x12: "Division or modulo by zero",
+                    0x21: "Attempt to convert to an invalid type",
+                    0x22: "Access to a storage byte array that is incorrectly encoded",
+                    0x31: ".pop() on an empty array",
+                    0x32: "Array index is out of bounds",
+                    0x41: "Too much memory was allocated, or an array was created that is too large",
+                    0x51: "Call to zero-initialized variable of internal function type"
+                }
+                
+                panic_desc = panic_codes.get(panic_code, f"Unknown panic code: {panic_code}")
+                return f"Panic({panic_code}): {panic_desc}"
+            # 检查是否有其他常见的错误选择器模式
+            elif len(hex_error) >= 8:
+                # 提取前4个字节（8个十六进制字符）作为函数选择器
+                selector = hex_error[:8]
+                
+                # 自定义错误可能有不同的选择器，尝试通用解析
+                if len(hex_error) > 8:
+                    try:
+                        # 尝试按照标准错误格式解析
+                        data = hex_error[8:]
+                        
+                        # 如果数据长度足够，尝试解析
+                        if len(data) >= 64:
+                            # 获取第一个参数的偏移量（通常在第4-7个字节，即8-15个hex字符位置）
+                            offset_hex = data[64:128]  # offset in word 2
+                            offset = int(offset_hex, 16) * 2  # Convert word offset to hex char offset
+                            
+                            # 获取字符串长度（在偏移位置后的32字节）
+                            start_pos = 128  # Start after the first two words
+                            length_hex = data[start_pos:start_pos+64]
+                            
+                            if length_hex:  # Check if we have length data
+                                length = int(length_hex, 16)
+                                
+                                # Get the actual error message (after length field)
+                                message_start = start_pos + 64
+                                message_hex = data[message_start:message_start + length*2]
+                                
+                                if message_hex:
+                                    try:
+                                        message = bytes.fromhex(message_hex).decode('utf-8')
+                                        return message
+                                    except UnicodeDecodeError:
+                                        pass
+                    except Exception:
+                        pass
+            
+            # 如果以上都不匹配，尝试简单的十六进制转字符串
+            try:
+                # Remove common prefixes and try direct decoding
+                clean_hex = hex_error.replace('0x', '')
+                if len(clean_hex) % 2 == 0:
+                    message = bytes.fromhex(clean_hex).decode('utf-8', errors='ignore').strip('\x00')
+                    if message:
+                        return message
+            except Exception:
+                pass
+
+            # 如果所有尝试都失败，返回原始错误信息
+            return hex_error
         except Exception as e:
-            return f"Unable to resolve: {str(e)}"
+            return f"Unable to decode error: {str(e)}"
 
     def _adjust_gas_by_error_type(self, attempt, max_retries, gas_limit, error_str):
         """
@@ -209,7 +323,8 @@ class TransactionHelper:
                         gas_limit = 100000
                 except Exception as e:
                     logger.error(f"Failed to eth.estimate_gas: {str(e)}")
-                    decoded_error = self.decode_revert_reason(str(e)) if '0x' in str(e) else str(e)
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
                     
                     # 根据错误类型调整gas策略
                     error_str = str(e).lower()
@@ -1788,9 +1903,14 @@ class GaeaDailyTask:
 
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-                # 构建交易 - 购卡合约金额授权
-                transaction = usdc_contract.functions.approve(invite_address, inviter_price).build_transaction(base_transaction)
-                logger.debug(f"approve transaction: {transaction}")
+                try:
+                    # 构建交易 - 购卡合约金额授权
+                    transaction = usdc_contract.functions.approve(invite_address, inviter_price).build_transaction(base_transaction)
+                    logger.debug(f"approve transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
                 # 发送交易
                 tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
@@ -1808,9 +1928,14 @@ class GaeaDailyTask:
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 购卡
-            transaction = invite_contract.functions.inviter( referral_address ).build_transaction(base_transaction)
-            logger.debug(f"inviter transaction: {transaction}")
+            try:
+                # 构建交易 - 购卡
+                transaction = invite_contract.functions.inviter( referral_address ).build_transaction(base_transaction)
+                logger.debug(f"inviter transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # invite.inviter
@@ -2009,9 +2134,14 @@ class GaeaDailyTask:
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 提现
-            transaction = invite_contract.functions.claimrewards( ).build_transaction(base_transaction)
-            logger.debug(f"claimrewards transaction: {transaction}")
+            try:
+                # 构建交易 - 提现
+                transaction = invite_contract.functions.claimrewards( ).build_transaction(base_transaction)
+                logger.debug(f"claimrewards transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # invite.claimrewards
@@ -2131,9 +2261,14 @@ class GaeaDailyTask:
 
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-                # 构建交易 - 购卡合约金额授权
-                transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(base_transaction)
-                logger.debug(f"approve transaction: {transaction}")
+                try:
+                    # 构建交易 - 购卡合约金额授权
+                    transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(base_transaction)
+                    logger.debug(f"approve transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
                 # 发送交易
                 tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
@@ -2147,9 +2282,14 @@ class GaeaDailyTask:
 
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 购买
-            transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(base_transaction)
-            logger.debug(f"buyTickets transaction: {transaction}")
+            try:
+                # 构建交易 - 购买
+                transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(base_transaction)
+                logger.debug(f"buyTickets transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # ticket.buyTickets
@@ -2331,10 +2471,15 @@ class GaeaDailyTask:
 
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-                # 构建交易 - 情绪合约金额授权
-                MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
-                transaction = usdc_contract.functions.approve(emotion_address, MAX_UINT256).build_transaction(base_transaction)
-                logger.debug(f"approve transaction: {transaction}")
+                try:
+                    # 构建交易 - 情绪合约金额授权
+                    MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
+                    transaction = usdc_contract.functions.approve(emotion_address, MAX_UINT256).build_transaction(base_transaction)
+                    logger.debug(f"approve transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
                 # 发送交易
                 tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
@@ -2348,14 +2493,19 @@ class GaeaDailyTask:
 
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 情绪打卡
-            if ERA3_ONLINE_STAMP > current_timestamp:
-                transaction = emotion_contract.functions.emotions( emotion_int ).build_transaction(base_transaction)
-            elif EMOTION3_ONLINE_STAMP > current_timestamp:
-                transaction = emotion_contract.functions.emotions( sender_address, emotion_int ).build_transaction(base_transaction)
-            else:
-                transaction = emotion_contract.functions.bet( sender_address, emotion_int ).build_transaction(base_transaction)
-            logger.debug(f"emotions transaction: {transaction}")
+            try:
+                # 构建交易 - 情绪打卡
+                if ERA3_ONLINE_STAMP > current_timestamp:
+                    transaction = emotion_contract.functions.emotions( emotion_int ).build_transaction(base_transaction)
+                elif EMOTION3_ONLINE_STAMP > current_timestamp:
+                    transaction = emotion_contract.functions.emotions( sender_address, emotion_int ).build_transaction(base_transaction)
+                else:
+                    transaction = emotion_contract.functions.bet( sender_address, emotion_int ).build_transaction(base_transaction)
+                logger.debug(f"emotions transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # emotion.bet
@@ -2493,9 +2643,14 @@ class GaeaDailyTask:
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 提现
-            transaction = reward_contract.functions.claim().build_transaction(base_transaction)
-            logger.debug(f"claim transaction: {transaction}")
+            try:
+                # 构建交易 - 提现
+                transaction = reward_contract.functions.claim().build_transaction(base_transaction)
+                logger.debug(f"claim transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # reward.claim
@@ -2670,10 +2825,15 @@ class GaeaDailyTask:
 
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-                # 构建交易 - 情绪合约金额授权
-                MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
-                transaction = usdc_contract.functions.approve(choice_address, MAX_UINT256).build_transaction(base_transaction)
-                logger.debug(f"approve transaction: {transaction}")
+                try:
+                    # 构建交易 - 情绪合约金额授权
+                    MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
+                    transaction = usdc_contract.functions.approve(choice_address, MAX_UINT256).build_transaction(base_transaction)
+                    logger.debug(f"approve transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
                 # 发送交易
                 tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
@@ -2687,9 +2847,14 @@ class GaeaDailyTask:
 
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 情绪打卡
-            transaction = choice_contract.functions.bet( sender_address, choice_int, soul_int ).build_transaction(base_transaction)
-            logger.debug(f"choices transaction: {transaction}")
+            try:
+                # 构建交易 - 情绪打卡
+                transaction = choice_contract.functions.bet( sender_address, choice_int, soul_int ).build_transaction(base_transaction)
+                logger.debug(f"choices transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # choice.bet
@@ -2819,9 +2984,14 @@ class GaeaDailyTask:
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 提现
-            transaction = award_contract.functions.claim().build_transaction(base_transaction)
-            logger.debug(f"claim transaction: {transaction}")
+            try:
+                # 构建交易 - 提现
+                transaction = award_contract.functions.claim().build_transaction(base_transaction)
+                logger.debug(f"claim transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # award.claim
@@ -2946,13 +3116,18 @@ class GaeaDailyTask:
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 铸造
-            if snftmint_id==0:
-                transaction = snftmint_contract.functions.mintNFT(nft_level,block_number,final_hash).build_transaction(base_transaction)
-                logger.debug(f"mintNFT transaction: {transaction}")
-            else:
-                transaction = snftmint_contract.functions.upgradeNFT(snftmint_id, nft_level,block_number,final_hash).build_transaction(base_transaction)
-                logger.debug(f"upgradeNFT transaction: {transaction}")
+            try:
+                # 构建交易 - 铸造
+                if snftmint_id==0:
+                    transaction = snftmint_contract.functions.mintNFT(nft_level,block_number,final_hash).build_transaction(base_transaction)
+                    logger.debug(f"mintNFT transaction: {transaction}")
+                else:
+                    transaction = snftmint_contract.functions.upgradeNFT(snftmint_id, nft_level,block_number,final_hash).build_transaction(base_transaction)
+                    logger.debug(f"upgradeNFT transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # snftmint.mintNFT
@@ -3162,13 +3337,18 @@ class GaeaDailyTask:
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 铸造
-            if anftmint_id==0:
-                transaction = anftmint_contract.functions.mintNFT(nft_ticket,block_number,final_hash).build_transaction(base_transaction)
-                logger.debug(f"mintNFT transaction: {transaction}")
-            else:
-                transaction = anftmint_contract.functions.upgradeNFT(anftmint_id, nft_ticket,block_number,final_hash).build_transaction(base_transaction)
-                logger.debug(f"upgradeNFT transaction: {transaction}")
+            try:
+                # 构建交易 - 铸造
+                if anftmint_id==0:
+                    transaction = anftmint_contract.functions.mintNFT(nft_ticket,block_number,final_hash).build_transaction(base_transaction)
+                    logger.debug(f"mintNFT transaction: {transaction}")
+                else:
+                    transaction = anftmint_contract.functions.upgradeNFT(anftmint_id, nft_ticket,block_number,final_hash).build_transaction(base_transaction)
+                    logger.debug(f"upgradeNFT transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # anftmint.mintNFT
@@ -3383,9 +3563,14 @@ class GaeaDailyTask:
 
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, BNB_CHAINID)
-            # 构建交易 - 铸造
-            transaction = laurelnftmint_contract.functions.purchase(1, nft_zone,nft_number,final_hash).build_transaction(base_transaction)
-            logger.debug(f"purchase transaction: {transaction}")
+            try:
+                # 构建交易 - 铸造
+                transaction = laurelnftmint_contract.functions.purchase(1, nft_zone,nft_number,final_hash).build_transaction(base_transaction)
+                logger.debug(f"purchase transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # laurelnftmint.purchase
@@ -3479,9 +3664,14 @@ class GaeaDailyTask:
 
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, BNB_CHAINID)
-            # 构建交易 - 抽奖
-            transaction = laurelnftlottery_contract.functions.lottery(phaseid, packeddata, signature).build_transaction(base_transaction)
-            logger.debug(f"lottery transaction: {transaction}")
+            try:
+                # 构建交易 - 抽奖
+                transaction = laurelnftlottery_contract.functions.lottery(phaseid, packeddata, signature).build_transaction(base_transaction)
+                logger.debug(f"lottery transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # laurelnftlottery.lottery
@@ -3624,9 +3814,14 @@ class GaeaDailyTask:
                 
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-                # 构建交易 - 转账
-                transaction = usdc_contract.functions.transfer(pooling_address, balance_usdc).build_transaction(base_transaction)
-                logger.debug(f"transfer transaction: {transaction}")
+                try:
+                    # 构建交易 - 转账
+                    transaction = usdc_contract.functions.transfer(pooling_address, balance_usdc).build_transaction(base_transaction)
+                    logger.debug(f"transfer transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
                 # 发送交易
                 tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.transfer
@@ -3646,9 +3841,14 @@ class GaeaDailyTask:
             # if 100000000 < sender_balance_sxp and pooling_addr != '': # 大于100开始归集SXP
             #     # 使用公共函数构建基础交易参数
             #     base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            #     # 构建交易 - 转账
-            #     transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(base_transaction)
-            #     logger.debug(f"transfer transaction: {transaction}")
+            #     try:
+            #         # 构建交易 - 转账
+            #         transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(base_transaction)
+            #         logger.debug(f"transfer transaction: {transaction}")
+            #     except Exception as e:
+            #         decoded_error = self.decode_revert_reason(e)
+            #         logger.error(f"Decoded error: {decoded_error}")
+            #         raise Exception(decoded_error)
 
             #     # 发送交易
             #     tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # sxp.transfer
@@ -5049,18 +5249,20 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | No NFT")
                 return "SUCCESS"
             elif nfttokenId > 0: # 已铸造
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | Start lottery")
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | Start lottery")
                 # -------------------------------------------------------------------------- lottery_generate
                 clicker_response = await self.laurelnftlottery_generate_clicker(eth_address,1,nfttokenId)
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftgenerate response: {clicker_response}")  # {'phaseid': 1, 'packeddata': 33203269, 'signature': '0x46fcb058ce'}
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftgenerate response: {clicker_response['packeddata']}")  # {'phaseid': 1, 'packeddata': 33203269, 'signature': '0x46fcb058ce'}
                 if len(self.client.prikey) in [64,66]:
                     packeddata = clicker_response['packeddata']
                     signature = clicker_response['signature']
                     # -------------------------------------------------------------------------- laurelnftlottery
                     response = await self.laurelnftlottery_clicker(eth_address, 1, nfttokenId, packeddata, signature)
-                    logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery response: {response}")
+                    if response == "ERROR":
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery response: {response}")
                     
                     delay = random.randint(10, 20)
                     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery delay: {delay} seconds")
