@@ -93,11 +93,11 @@ class TransactionHelper:
             str: 解码后的错误信息
         """
         try:
-            # 处理不同类型的输入数据
+            # 统一提取十六进制错误信息
             hex_error = None
             
             if isinstance(input_data, tuple):
-                # 如果输入是元组，从中提取十六进制错误信息
+                # 从元组中查找十六进制错误信息
                 for item in input_data:
                     if isinstance(item, str) and item.startswith('0x') and len(item) > 10:
                         hex_error = item
@@ -107,124 +107,114 @@ class TransactionHelper:
                     # 直接是十六进制字符串
                     hex_error = input_data
                 else:
-                    # 字符串中可能包含十六进制错误信息
-                    # 查找其中的十六进制错误信息
-                    parts = input_data.split()
-                    for part in parts:
-                        if part.startswith('0x') and len(part) > 10:
-                            # 检查是否包含错误选择器
-                            check_str = part[2:] if part.startswith('0x') else part
-                            if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
-                                hex_error = part
-                                break
-            else:
-                # 其他类型转换为字符串处理
-                input_str = str(input_data)
-                if '0x' in input_str:
-                    # 从字符串中提取十六进制错误信息
-                    import re
-                    hex_matches = re.findall(r'0x[a-fA-F0-9]+', input_str)
+                    # 从普通字符串中查找十六进制错误信息
+                    hex_matches = re.findall(r'0x[a-fA-F0-9]+', input_data)
                     for match in hex_matches:
-                        check_str = match[2:]
+                        check_str = match[2:] if match.startswith('0x') else match
+                        # 检查是否包含常见的错误选择器
                         if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
                             hex_error = match
                             break
+            else:
+                # 其他类型转换为字符串处理
+                input_str = str(input_data)
+                hex_matches = re.findall(r'0x[a-fA-F0-9]+', input_str)
+                for match in hex_matches:
+                    check_str = match[2:] if match.startswith('0x') else match
+                    if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
+                        hex_error = match
+                        break
             
             if not hex_error:
                 return str(input_data)  # 如果没找到十六进制错误信息，返回原始数据
             
-            # 移除 '0x' 前缀
-            if hex_error.startswith('0x'):
-                hex_error = hex_error[2:]
+            # 统一移除 '0x' 前缀
+            hex_error_clean = hex_error[2:] if hex_error.startswith('0x') else hex_error
             
-            # 检查是否是标准的 Error(string) 选择器
-            if hex_error.startswith('08c379a0'):
-                # 跳过选择器 (4 bytes = 8 hex chars)
-                data = hex_error[8:]
-                
-                # 获取字符串长度 (offset 32 bytes = 64 hex chars)
-                length_hex = data[64:128]
-                length = int(length_hex, 16)
-                
-                # 获取实际的错误消息 (从 128 hex chars 开始)
-                message_hex = data[128:128 + length*2]
-                message = bytes.fromhex(message_hex).decode('utf-8')
-                
-                return message
-            # 检查是否是 Panic(uint256) 选择器
-            elif hex_error.startswith('4e487b71'):
-                # 跳过选择器 (4 bytes = 8 hex chars)
-                data = hex_error[8:]
-                
-                # Panic code 位于接下来的32字节
-                panic_code_hex = data[:64]
-                panic_code = int(panic_code_hex, 16)
-                
-                # Panic codes mapping
-                panic_codes = {
-                    0x00: "Generic compiler inserted panics",
-                    0x01: "Assert with an argument that evaluates to false",
-                    0x11: "Arithmetic operation results in underflow or overflow outside of an unchecked block",
-                    0x12: "Division or modulo by zero",
-                    0x21: "Attempt to convert to an invalid type",
-                    0x22: "Access to a storage byte array that is incorrectly encoded",
-                    0x31: ".pop() on an empty array",
-                    0x32: "Array index is out of bounds",
-                    0x41: "Too much memory was allocated, or an array was created that is too large",
-                    0x51: "Call to zero-initialized variable of internal function type"
-                }
-                
-                panic_desc = panic_codes.get(panic_code, f"Unknown panic code: {panic_code}")
-                return f"Panic({panic_code}): {panic_desc}"
-            # 检查是否有其他常见的错误选择器模式
-            elif len(hex_error) >= 8:
-                # 提取前4个字节（8个十六进制字符）作为函数选择器
-                selector = hex_error[:8]
-                
-                # 自定义错误可能有不同的选择器，尝试通用解析
-                if len(hex_error) > 8:
-                    try:
-                        # 尝试按照标准错误格式解析
-                        data = hex_error[8:]
+            # 定义错误类型常量
+            ERROR_SELECTOR = '08c379a0'  # Error(string) 选择器
+            PANIC_SELECTOR = '4e487b71'  # Panic(uint256) 选择器
+            
+            # 按优先级解析错误类型
+            if hex_error_clean.startswith(ERROR_SELECTOR):
+                # 解析 Error(string) 类型
+                try:
+                    data = hex_error_clean[8:]  # 跳过选择器
+                    length_hex = data[64:128]   # 获取字符串长度
+                    length = int(length_hex, 16)
+                    message_hex = data[128:128 + length*2]  # 获取实际错误消息
+                    message = bytes.fromhex(message_hex).decode('utf-8')
+                    return message
+                except (ValueError, UnicodeDecodeError):
+                    pass  # 解析失败，继续尝试其他类型
+            
+            elif hex_error_clean.startswith(PANIC_SELECTOR):
+                # 解析 Panic(uint256) 类型
+                try:
+                    data = hex_error_clean[8:]  # 跳过选择器
+                    panic_code_hex = data[:64]  # 获取panic代码
+                    panic_code = int(panic_code_hex, 16)
+                    
+                    # Panic codes mapping
+                    panic_codes = {
+                        0x00: "Generic compiler inserted panics",
+                        0x01: "Assert with an argument that evaluates to false",
+                        0x11: "Arithmetic operation results in underflow or overflow outside of an unchecked block",
+                        0x12: "Division or modulo by zero",
+                        0x21: "Attempt to convert to an invalid type",
+                        0x22: "Access to a storage byte array that is incorrectly encoded",
+                        0x31: ".pop() on an empty array",
+                        0x32: "Array index is out of bounds",
+                        0x41: "Too much memory was allocated, or an array was created that is too large",
+                        0x51: "Call to zero-initialized variable of internal function type"
+                    }
+                    
+                    panic_desc = panic_codes.get(panic_code, f"Unknown panic code: {panic_code}")
+                    return f"Panic({panic_code}): {panic_desc}"
+                except ValueError:
+                    pass  # 解析失败，继续尝试其他类型
+            
+            # 尝试解析自定义错误
+            elif len(hex_error_clean) >= 8:
+                try:
+                    # 按照标准ABI字符串格式解析
+                    data = hex_error_clean[8:]
+                    
+                    # 按照标准ABI字符串格式解析
+                    if len(data) >= 128:  # 确保有足够的数据
+                        # 获取偏移量（第二个word）
+                        offset_hex = data[64:128]
+                        offset = int(offset_hex, 16) * 2  # 转换为字符偏移
                         
-                        # 如果数据长度足够，尝试解析
-                        if len(data) >= 64:
-                            # 获取第一个参数的偏移量（通常在第4-7个字节，即8-15个hex字符位置）
-                            offset_hex = data[64:128]  # offset in word 2
-                            offset = int(offset_hex, 16) * 2  # Convert word offset to hex char offset
-                            
-                            # 获取字符串长度（在偏移位置后的32字节）
-                            start_pos = 128  # Start after the first two words
-                            length_hex = data[start_pos:start_pos+64]
-                            
-                            if length_hex:  # Check if we have length data
+                        # 获取字符串长度（在偏移位置后的word）
+                        length_start = 128 + offset
+                        if length_start + 64 <= len(data):  # 确保不会越界
+                            length_hex = data[length_start:length_start+64]
+                            try:
                                 length = int(length_hex, 16)
                                 
-                                # Get the actual error message (after length field)
-                                message_start = start_pos + 64
-                                message_hex = data[message_start:message_start + length*2]
-                                
-                                if message_hex:
-                                    try:
-                                        message = bytes.fromhex(message_hex).decode('utf-8')
-                                        return message
-                                    except UnicodeDecodeError:
-                                        pass
-                    except Exception:
-                        pass
+                                # 获取实际的消息内容
+                                message_start = length_start + 64
+                                if message_start + length*2 <= len(data):  # 确保不会越界
+                                    message_hex = data[message_start:message_start + length*2]
+                                    message = bytes.fromhex(message_hex).decode('utf-8')
+                                    return message
+                            except ValueError:
+                                pass
+                except (ValueError, IndexError):
+                    pass  # 解析失败，继续尝试其他类型
             
-            # 如果以上都不匹配，尝试简单的十六进制转字符串
+            # 最后尝试直接解码十六进制为字符串
             try:
-                # Remove common prefixes and try direct decoding
-                clean_hex = hex_error.replace('0x', '')
+                clean_hex = hex_error_clean
                 if len(clean_hex) % 2 == 0:
                     message = bytes.fromhex(clean_hex).decode('utf-8', errors='ignore').strip('\x00')
                     if message:
                         return message
-            except Exception:
+            except (ValueError, UnicodeDecodeError):
                 pass
-
-            # 如果所有尝试都失败，返回原始错误信息
+            
+            # 所有尝试都失败，返回原始错误信息
             return hex_error
         except Exception as e:
             return f"Unable to decode error: {str(e)}"
@@ -5254,7 +5244,7 @@ class GaeaDailyTask:
                 clicker_response = await self.laurelnftlottery_generate_clicker(eth_address,1,nfttokenId)
                 if clicker_response is None:
                     return "ERROR"
-                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftgenerate response: {clicker_response['packeddata']}")  # {'phaseid': 1, 'packeddata': 33203269, 'signature': '0x46fcb058ce'}
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftgenerate packeddata: {clicker_response['packeddata']}")  # {'phaseid': 1, 'packeddata': 33203269, 'signature': '0x46fcb058ce'}
                 if len(self.client.prikey) in [64,66]:
                     packeddata = clicker_response['packeddata']
                     signature = clicker_response['signature']
