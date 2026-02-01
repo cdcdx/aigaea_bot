@@ -26,6 +26,7 @@ GAEA_API = os.getenv("GAEA_API", default="https://api.aigaea.net")
 LAUREL_API = os.getenv("LAUREL_API", default="https://apimeme.aigaea.net")
 # DELAY
 SNAIL_UNIT = int(os.getenv("SNAIL_UNIT", default=1800))  # 延迟单位，秒
+CLAIM_BALANCE = float(os.getenv("CLAIM_BALANCE", default=5))  # 提现额度
 
 # CAPTCHA
 TWO_CAPTCHA_API_URL = os.getenv("TWO_CAPTCHA_API_URL", default="https://api.2captcha.com")

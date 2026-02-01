@@ -20,7 +20,7 @@ from utils.decorators import helper
 from utils.helpers import is_valid_jwt_format, is_token_valid
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid, get_emotion_for_txt, get_choice_for_txt
 from utils.services import get_captcha_key, generate_random_groups
-from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, EMOTION3_ONLINE_STAMP, SNAIL_UNIT
+from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, EMOTION3_ONLINE_STAMP, SNAIL_UNIT, CLAIM_BALANCE
 from config import CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS, POOLING_ADDRESS
 from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_TICKET, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT
 from config import LAUREL_API, BNB_WEB3_RPC, BNB_CHAINID, BNB_LNFTMINT, BNB_LNFTLOTTERY
@@ -2079,13 +2079,10 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(invite_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            # if reward_usdc < 10.0: # 余额大于10USDC显示绿色
-            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
-            # else:
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
             return reward_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward_clicker except: {error}")
+            return 0
 
     async def godhoodclaimed_clicker(self, eth_address) -> None:
         try:
@@ -2117,7 +2114,7 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(invite_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            if reward_usdc < 10.0: # 余额大于10USDC才能提现
+            if reward_usdc < CLAIM_BALANCE: # 大于XX才能提现
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
@@ -2583,13 +2580,10 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(reward_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            # if reward_usdc < 5.0: # 余额大于5USDC显示绿色
-            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
-            # else:
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
             return reward_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward_clicker except: {error}")
+            return 0
 
     async def emotionclaimed_clicker(self, eth_address) -> None:
         try:
@@ -2626,7 +2620,7 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(reward_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            if reward_usdc < 5.0: # 余额大于5USDC再提现
+            if reward_usdc < CLAIM_BALANCE: # 大于XX才能提现
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
@@ -2928,13 +2922,10 @@ class GaeaDailyTask:
             award_usdc = web3_obj.from_wei(award_sender_usdc, 'mwei')
             logger.debug(f"award_usdc: {award_usdc}")
 
-            # if award_usdc < 5.0: # 余额大于5USDC显示绿色
-            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
-            # else:
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
             return award_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward_clicker except: {error}")
+            return 0
 
     async def choiceclaimed_clicker(self, eth_address) -> None:
         try:
@@ -2967,7 +2958,7 @@ class GaeaDailyTask:
             award_usdc = web3_obj.from_wei(award_sender_usdc, 'mwei')
             logger.debug(f"award_usdc: {award_usdc}")
 
-            if award_usdc < 5.0: # 余额大于5USDC再提现
+            if award_usdc < CLAIM_BALANCE: # 大于XX才能提现
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
@@ -3727,10 +3718,6 @@ class GaeaDailyTask:
 
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {sender_usdc} sxp: {sender_sxp}")
 
-            # if sender_usdc < 5.0: # 余额大于5USDC显示绿色
-            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} sender_usdc: {sender_usdc}")
-            # else:
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} sender_usdc: {sender_usdc}")
             return sender_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundsreward_clicker except: {error}")
@@ -4615,7 +4602,7 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward response: {clicker_response}")
             
-            if clicker_response < 10.0: # 余额大于10USDC显示绿色
+            if clicker_response < CLAIM_BALANCE: # 大于XX显示绿色
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             else:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
@@ -4692,7 +4679,7 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward response: {clicker_response}")
             
-            if clicker_response < 5.0: # 余额大于5USDC显示绿色
+            if clicker_response < CLAIM_BALANCE: # 大于XX显示绿色
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             else:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
@@ -4769,7 +4756,7 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward response: {clicker_response}")
             
-            if clicker_response < 5.0: # 余额大于5USDC显示绿色
+            if clicker_response < CLAIM_BALANCE: # 大于XX显示绿色
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             else:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
@@ -5588,7 +5575,7 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundsreward response: {clicker_response}")
             
-            if clicker_response < 5.0: # 余额大于5USDC显示绿色
+            if clicker_response < CLAIM_BALANCE: # 大于XX显示绿色
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             else:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
