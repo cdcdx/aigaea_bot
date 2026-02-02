@@ -4,7 +4,7 @@ import sys
 import json
 import hashlib
 import time
-import fcntl
+import platform
 from jose import jwt
 from functools import lru_cache
 
@@ -48,7 +48,9 @@ def _update_token_line(file_path, line_id, field_index, new_value):
     
     try:
         with open(file_path, 'r', encoding='utf-8') as f_read:
-            fcntl.flock(f_read.fileno(), fcntl.LOCK_SH)  # 共享锁读取原文件
+            if platform.system() != 'Windows':
+                import fcntl
+                fcntl.flock(f_read.fileno(), fcntl.LOCK_SH)  # 共享锁读取原文件
             lines = f_read.readlines()
             
         if line_id < 1 or line_id > len(lines):
@@ -74,7 +76,9 @@ def _update_token_line(file_path, line_id, field_index, new_value):
         
         # 使用独占锁重命名临时文件到目标文件
         with open(file_path, 'r', encoding='utf-8') as f_target:
-            fcntl.flock(f_target.fileno(), fcntl.LOCK_EX)  # 独占锁
+            if platform.system() != 'Windows':
+                import fcntl
+                fcntl.flock(f_target.fileno(), fcntl.LOCK_EX)  # 独占锁
             os.replace(temp_file_path, file_path)  # 原子操作替换文件
             
     except FileNotFoundError:
