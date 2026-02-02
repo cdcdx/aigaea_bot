@@ -10,7 +10,7 @@ from aiohttp import ClientSession
 from aiohttp_socks import ProxyConnector
 from jose import jwt
 
-from utils.helpers import set_data_for_token
+from utils.helpers import set_data_for_token, is_valid_jwt_format, is_token_valid
 
 def getheaders():
     return {
@@ -42,14 +42,15 @@ class GaeaClient:
 
         # self.token = token
         ## jwt decode
-        if len(token)>20 and len(token.split('.')) == 3:
-            payload = jwt.get_unverified_claims(token)
-            logger.debug(f"payload: {payload}")
-            current_timestamp = int(time.time())
-            expire = payload.get("expire")
-            if expire is None or expire <= current_timestamp:
+        if token:  # token
+            if not is_valid_jwt_format(token): # 验证token格式
                 self.token = ''
-                set_data_for_token(self.runname, self.id, self.token)
+                set_data_for_token(runname, self.id, self.token)
+                logger.error(f"Invalid token - {self.id}")
+            elif not is_token_valid(token): # 验证token是否过期
+                self.token = ''
+                set_data_for_token(runname, self.id, self.token)
+                logger.error(f"Invalid token - {self.id}")
             else:
                 self.token = token
         else:

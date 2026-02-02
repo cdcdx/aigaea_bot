@@ -181,11 +181,23 @@ async def gaea_clicker_anftoblate(runname, id, userid, email, passwd, prikey, to
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_anftoblate()
 
+async def gaea_clicker_laurelnftinfo(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-laurelnftinfo")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_laurelnftinfo()
+
 async def gaea_clicker_laurelnftmint(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-laurelnftmint")
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_laurelnftmint()
+
+async def gaea_clicker_laurelnftlottery(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-laurelnftlottery")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_laurelnftlottery()
 
 async def gaea_clicker_missionconnect(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':

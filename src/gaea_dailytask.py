@@ -15,14 +15,15 @@ from web3 import Web3
 from web3.middleware import ExtraDataToPOAMiddleware
 
 from src.gaea_client import GaeaClient
-from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_emotion3, contract_abi_reward, contract_abi_reward3, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award, contract_abi_ticket
+from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_emotion3, contract_abi_reward, contract_abi_reward3, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award, contract_abi_ticket, contract_abi_lottery
 from utils.decorators import helper
+from utils.helpers import is_valid_jwt_format, is_token_valid
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid, get_emotion_for_txt, get_choice_for_txt
 from utils.services import get_captcha_key, generate_random_groups
-from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, EMOTION3_ONLINE_STAMP, SNAIL_UNIT
+from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, EMOTION3_ONLINE_STAMP, SNAIL_UNIT, CLAIM_BALANCE
 from config import CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS, POOLING_ADDRESS
 from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_TICKET, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT
-from config import LAUREL_API, BNB_WEB3_RPC, BNB_CHAINID, BNB_LNFTMINT
+from config import LAUREL_API, BNB_WEB3_RPC, BNB_CHAINID, BNB_LNFTMINT, BNB_LNFTLOTTERY
 
 def connect_web3_rpc():
     """
@@ -81,38 +82,244 @@ class TransactionHelper:
             "maxPriorityFeePerGas": priority_fee,
         }
 
-    def decode_revert_reason(self, hex_error):
+    def decode_revert_reason(self, input_data):
         """
-        解析 Solidity 合约的 revert 错误信息
+        解析 Solidity 合约的 revert 错误信息，支持多种输入格式
         
         Args:
-            hex_error: 16进制错误信息
+            input_data: 可能是16进制错误信息、包含错误信息的字符串或字典
             
         Returns:
             str: 解码后的错误信息
         """
         try:
-            # 移除 '0x' 前缀
-            if hex_error.startswith('0x'):
-                hex_error = hex_error[2:]
-            # 检查是否是标准的 Error(string) 选择器
-            if hex_error.startswith('08c379a0'):
-                # 跳过选择器 (4 bytes = 8 hex chars)
-                data = hex_error[8:]
-                
-                # 获取字符串长度 (offset 32 bytes = 64 hex chars)
-                length_hex = data[64:128]
-                length = int(length_hex, 16)
-                
-                # 获取实际的错误消息 (从 128 hex chars 开始)
-                message_hex = data[128:128 + length*2]
-                message = bytes.fromhex(message_hex).decode('utf-8')
-                
-                return message
+            logger.debug(f"input_data: {input_data} ({type(input_data)})")
+            
+            # 统一提取十六进制错误信息
+            hex_error = None
+            
+            # 添加对 Web3RPCError 的特殊处理
+            if hasattr(input_data, '__class__') and 'Web3RPCError' in str(type(input_data)):
+                # 尝试获取错误数据属性
+                if hasattr(input_data, 'data'):
+                    error_data = getattr(input_data, 'data')
+                    if isinstance(error_data, str) and error_data.startswith('0x'):
+                        hex_error = error_data
+                    elif isinstance(error_data, dict) and 'data' in error_data:
+                        # 处理嵌套的错误数据结构
+                        nested_data = error_data.get('data', '')
+                        if isinstance(nested_data, str) and nested_data.startswith('0x'):
+                            hex_error = nested_data
+                # 如果没有找到十六进制数据，尝试从 message 属性获取
+                if not hex_error and hasattr(input_data, 'message'):
+                    message = getattr(input_data, 'message', '')
+                    if isinstance(message, str) and message.startswith('0x') and len(message) > 10:
+                        hex_error = message
+                    elif isinstance(message, str) and '0x' in message:
+                        # 从错误消息中提取十六进制
+                        hex_matches = re.findall(r'0x[a-fA-F0-9]+', message)
+                        for match in hex_matches:
+                            check_str = match[2:] if match.startswith('0x') else match
+                            if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
+                                hex_error = match
+                                break
+                # 如果还是没有找到十六进制错误，直接从 Web3RPCError 提取 code 和 message
+                if not hex_error:
+                    if hasattr(input_data, 'code') and hasattr(input_data, 'message'):
+                        code = getattr(input_data, 'code', '')
+                        message = getattr(input_data, 'message', '')
+                        hex_error = f"{code}: {message}" if code else message
+                        # return f"{code}: {message}" if code else message
+                logger.debug(f"Extracted hex_error from Web3RPCError: {hex_error}")
+            elif isinstance(input_data, tuple):
+                # 从元组中查找十六进制错误信息
+                for item in input_data:
+                    if isinstance(item, str) and item.startswith('0x') and len(item) > 10:
+                        hex_error = item
+                        break
+            elif isinstance(input_data, dict):
+                # 处理嵌套错误结构，支持 {'error': {'code': -32000, 'message': '...'}}
+                if 'error' in input_data and isinstance(input_data['error'], dict):
+                    nested_error = input_data['error']
+                    message = nested_error.get('message', '')
+                    code = nested_error.get('code', '')
+                    
+                    # 如果嵌套的error对象包含十六进制错误信息，优先处理
+                    if isinstance(message, str) and message.startswith('0x') and len(message) > 10:
+                        hex_error = message
+                    elif isinstance(message, str) and '0x' in message:
+                        # 从嵌套错误消息中提取十六进制
+                        hex_matches = re.findall(r'0x[a-fA-F0-9]+', message)
+                        for match in hex_matches:
+                            check_str = match[2:] if match.startswith('0x') else match
+                            if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
+                                hex_error = match
+                                break
+                        if hex_error:
+                            pass  # 已找到hex_error
+                        else:
+                            # 如果没有找到十六进制错误信息，返回嵌套错误的文本
+                            hex_error = f"{code}: {message}" if code else message
+                            # return f"{code}: {message}" if code else message
+                    else:
+                        # 返回嵌套错误的文本
+                        hex_error = f"{code}: {message}" if code else message
+                        # return f"{code}: {message}" if code else message
+                # 处理直接的错误结构，支持 {'code': -32000, 'message': '...'}
+                elif 'message' in input_data:
+                    message = input_data.get('message', '')
+                    code = input_data.get('code', '')
+                    
+                    if isinstance(message, str) and message.startswith('0x') and len(message) > 10:
+                        hex_error = message
+                    elif isinstance(message, str) and '0x' in message:
+                        # 从错误消息中提取十六进制
+                        hex_matches = re.findall(r'0x[a-fA-F0-9]+', message)
+                        for match in hex_matches:
+                            check_str = match[2:] if match.startswith('0x') else match
+                            if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
+                                hex_error = match
+                                break
+                        if hex_error:
+                            pass  # 已找到hex_error
+                        else:
+                            # 如果没有找到十六进制错误信息，返回错误文本
+                            hex_error = f"{code}: {message}" if code else message
+                            # return f"{code}: {message}" if code else message
+                    else:
+                        # 返回错误文本
+                        hex_error = f"{code}: {message}" if code else message
+                        # return f"{code}: {message}" if code else message
+                else:
+                    # 对于其他字典格式，转换为字符串处理
+                    input_str = str(input_data)
+                    hex_matches = re.findall(r'0x[a-fA-F0-9]+', input_str)
+                    for match in hex_matches:
+                        check_str = match[2:] if match.startswith('0x') else match
+                        if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
+                            hex_error = match
+                            break
+            elif isinstance(input_data, str):
+                if input_data.startswith('0x'):
+                    # 直接是十六进制字符串
+                    hex_error = input_data
+                else:
+                    # 从普通字符串中查找十六进制错误信息
+                    hex_matches = re.findall(r'0x[a-fA-F0-9]+', input_data)
+                    for match in hex_matches:
+                        check_str = match[2:] if match.startswith('0x') else match
+                        # 检查是否包含常见的错误选择器
+                        if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
+                            hex_error = match
+                            break
             else:
-                return hex_error
+                # 其他类型转换为字符串处理
+                input_str = str(input_data)
+                hex_matches = re.findall(r'0x[a-fA-F0-9]+', input_str)
+                for match in hex_matches:
+                    check_str = match[2:] if match.startswith('0x') else match
+                    if len(check_str) >= 8 and (check_str.startswith('08c379a0') or check_str.startswith('4e487b71')):
+                        hex_error = match
+                        break
+            
+            if not hex_error:
+                return str(input_data)  # 如果没找到十六进制错误信息，返回原始数据
+            
+            # 统一移除 '0x' 前缀
+            hex_error_clean = hex_error[2:] if hex_error.startswith('0x') else hex_error
+            
+            # 定义错误类型常量
+            ERROR_SELECTOR = '08c379a0'  # Error(string) 选择器
+            PANIC_SELECTOR = '4e487b71'  # Panic(uint256) 选择器
+            
+            # 尝试按优先级解析错误类型
+            if hex_error_clean.startswith(ERROR_SELECTOR):
+                # 解析 Error(string) 类型
+                try:
+                    data = hex_error_clean[8:]  # 跳过选择器
+                    length_hex = data[64:128]   # 获取字符串长度
+                    length = int(length_hex, 16)
+                    message_hex = data[128:128 + length*2]  # 获取实际错误消息
+                    hex_error = bytes.fromhex(message_hex).decode('utf-8')
+                    # message = bytes.fromhex(message_hex).decode('utf-8')
+                    # return message
+                except (ValueError, UnicodeDecodeError):
+                    pass  # 解析失败，继续尝试其他类型
+            # 尝试解析Panic错误
+            elif hex_error_clean.startswith(PANIC_SELECTOR):
+                # 解析 Panic(uint256) 类型
+                try:
+                    data = hex_error_clean[8:]  # 跳过选择器
+                    panic_code_hex = data[:64]  # 获取panic代码
+                    panic_code = int(panic_code_hex, 16)
+                    
+                    # Panic codes mapping
+                    panic_codes = {
+                        0x00: "Generic compiler inserted panics",
+                        0x01: "Assert with an argument that evaluates to false",
+                        0x11: "Arithmetic operation results in underflow or overflow outside of an unchecked block",
+                        0x12: "Division or modulo by zero",
+                        0x21: "Attempt to convert to an invalid type",
+                        0x22: "Access to a storage byte array that is incorrectly encoded",
+                        0x31: ".pop() on an empty array",
+                        0x32: "Array index is out of bounds",
+                        0x41: "Too much memory was allocated, or an array was created that is too large",
+                        0x51: "Call to zero-initialized variable of internal function type"
+                    }
+                    panic_desc = panic_codes.get(panic_code, f"Unknown panic code: {panic_code}")
+                    hex_error = f"Panic({panic_code}): {panic_desc}"
+                    # return f"Panic({panic_code}): {panic_desc}"
+                except ValueError:
+                    pass  # 解析失败，继续尝试其他类型
+            # 尝试解析自定义错误
+            elif len(hex_error_clean) >= 8:
+                try:
+                    # 按照标准ABI字符串格式解析
+                    data = hex_error_clean[8:]
+                    
+                    # 按照标准ABI字符串格式解析
+                    if len(data) >= 128:  # 确保有足够的数据
+                        # 获取偏移量（第二个word）
+                        offset_hex = data[64:128]
+                        offset = int(offset_hex, 16) * 2  # 转换为字符偏移
+                        
+                        # 获取字符串长度（在偏移位置后的word）
+                        length_start = 128 + offset
+                        if length_start + 64 <= len(data):  # 确保不会越界
+                            length_hex = data[length_start:length_start+64]
+                            try:
+                                length = int(length_hex, 16)
+                                
+                                # 获取实际的消息内容
+                                message_start = length_start + 64
+                                if message_start + length*2 <= len(data):  # 确保不会越界
+                                    message_hex = data[message_start:message_start + length*2]
+                                    hex_error = bytes.fromhex(message_hex).decode('utf-8')
+                                    # message = bytes.fromhex(message_hex).decode('utf-8')
+                                    # return message
+                            except ValueError:
+                                pass
+                except (ValueError, IndexError):
+                    pass  # 解析失败，继续尝试其他类型
+            # 尝试直接解码十六进制为字符串
+            else:
+                # 直接解码十六进制为字符串
+                try:
+                    clean_hex = hex_error_clean
+                    if len(clean_hex) % 2 == 0:
+                        hex_error = bytes.fromhex(clean_hex).decode('utf-8', errors='ignore').strip('\x00')
+                        # message = bytes.fromhex(clean_hex).decode('utf-8', errors='ignore').strip('\x00')
+                        # return message
+                except (ValueError, UnicodeDecodeError):
+                    pass
+            
+            # 所有尝试都失败，返回原始错误信息
+            logger.debug(f"hex_error: {hex_error}")
+            return hex_error
         except Exception as e:
-            return f"Unable to resolve: {str(e)}"
+            logger.error(f"Unable to decode error: {str(e)}")
+            return f"{str(e)}"
+
 
     def _adjust_gas_by_error_type(self, attempt, max_retries, gas_limit, error_str):
         """
@@ -208,7 +415,8 @@ class TransactionHelper:
                         gas_limit = 100000
                 except Exception as e:
                     logger.error(f"Failed to eth.estimate_gas: {str(e)}")
-                    decoded_error = self.decode_revert_reason(str(e)) if '0x' in str(e) else str(e)
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
                     
                     # 根据错误类型调整gas策略
                     error_str = str(e).lower()
@@ -567,6 +775,12 @@ class GaeaDailyTask:
             code = response.get('code', None)
             if code in [200, 201]:
                 logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} => {response['data']}")
+                
+                self.client.token = response['data'].get('token', None)
+                set_data_for_token(self.client.runname, self.client.id, self.client.token)
+                self.client.userid = response['data'].get('user_info', None).get('uid', None)
+                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                
                 return response['data']
             else:
                 message = response.get('msg', None)
@@ -587,10 +801,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- session
             url = GAEA_API.rstrip('/')+'/api/auth/session'
 
@@ -628,10 +841,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # 钱包地址
             sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -679,10 +891,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- earninfo
             url = GAEA_API.rstrip('/')+'/api/earn/info'
 
@@ -720,10 +931,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- godhoodinfo
             url = GAEA_API.rstrip('/')+'/api/godhood/info'
 
@@ -761,10 +971,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- godhoodgrowthinfo
             url = GAEA_API.rstrip('/')+'/api/godhood/growth/info'
 
@@ -802,10 +1011,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- era3info
             url = GAEA_API.rstrip('/')+'/api/ranking/era3?page=1&limit=20'
 
@@ -843,10 +1051,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- blindbox_list
             url = GAEA_API.rstrip('/')+'/api/godhood/blindbox/list'
 
@@ -892,10 +1099,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- blindbox_open
             url = GAEA_API.rstrip('/')+'/api/godhood/blindbox/open'
             json_data = {
@@ -938,10 +1144,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- ticketbox_list
             url = GAEA_API.rstrip('/')+'/api/ticket/list'
 
@@ -994,10 +1199,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- dailylist
             url = GAEA_API.rstrip('/')+'/api/reward/daily-list'
 
@@ -1035,10 +1239,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- dailycheckin
             url = GAEA_API.rstrip('/')+'/api/reward/daily-complete'
             # weekday = dt.now().weekday() + 1
@@ -1086,10 +1289,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- medalcheckin
             url = GAEA_API.rstrip('/')+'/api/medal/complete'
             json_data = {}
@@ -1131,10 +1333,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- ailist
             url = GAEA_API.rstrip('/')+'/api/ai/list'
 
@@ -1174,10 +1375,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- aitrain
             url = GAEA_API.rstrip('/')+'/api/ai/complete'
             json_data = {
@@ -1220,10 +1420,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- traincheckin
             url = GAEA_API.rstrip('/')+'/api/ai/complete-mission'
             json_data = { }
@@ -1265,10 +1464,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- emotionperiod
             url = GAEA_API.rstrip('/')+'/api/emotion/period'
             json_data = {
@@ -1310,10 +1508,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- choiceperiod
             url = GAEA_API.rstrip('/')+'/api/choice/period'
             json_data = {
@@ -1358,10 +1555,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- missionlist
             url = GAEA_API.rstrip('/')+'/api/mission/list'
 
@@ -1399,10 +1595,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- missionconnect
             if 10 < int(mission_id) < 99:
                 url = GAEA_API.rstrip('/')+'/api/auth/retweet/connect?id='+str(mission_id)
@@ -1444,10 +1639,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- missioncomplete
             url = GAEA_API.rstrip('/')+'/api/mission/complete-mission'
             json_data = {
@@ -1491,10 +1685,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- milestonelist
             url = GAEA_API.rstrip('/')+'/api/milestone/list'
 
@@ -1532,10 +1725,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- milestoneburn
             url = GAEA_API.rstrip('/')+'/api/milestone/burn'
             json_data = {
@@ -1578,10 +1770,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- milestoneclaim
             url = GAEA_API.rstrip('/')+f'/api/milestone/claim/{milestoneid}/{taskid}'
 
@@ -1620,10 +1811,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- visionlist
             url = GAEA_API.rstrip('/')+'/api/vision/list'
 
@@ -1661,10 +1851,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- visionburn
             chat_datas = generate_random_groups()
             
@@ -1711,10 +1900,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- visionclaim
             url = GAEA_API.rstrip('/')+f'/api/vision/claimed'
 
@@ -1807,9 +1995,14 @@ class GaeaDailyTask:
 
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-                # 构建交易 - 购卡合约金额授权
-                transaction = usdc_contract.functions.approve(invite_address, inviter_price).build_transaction(base_transaction)
-                logger.debug(f"approve transaction: {transaction}")
+                try:
+                    # 构建交易 - 购卡合约金额授权
+                    transaction = usdc_contract.functions.approve(invite_address, inviter_price).build_transaction(base_transaction)
+                    logger.debug(f"approve transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
                 # 发送交易
                 tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
@@ -1827,9 +2020,14 @@ class GaeaDailyTask:
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 购卡
-            transaction = invite_contract.functions.inviter( referral_address ).build_transaction(base_transaction)
-            logger.debug(f"inviter transaction: {transaction}")
+            try:
+                # 构建交易 - 购卡
+                transaction = invite_contract.functions.inviter( referral_address ).build_transaction(base_transaction)
+                logger.debug(f"inviter transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # invite.inviter
@@ -1983,13 +2181,10 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(invite_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            # if reward_usdc < 10.0: # 余额大于10USDC显示绿色
-            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
-            # else:
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
             return reward_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward_clicker except: {error}")
+            return 0
 
     async def godhoodclaimed_clicker(self, eth_address) -> None:
         try:
@@ -2021,16 +2216,21 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(invite_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            if reward_usdc < 10.0: # 余额大于10USDC才能提现
+            if reward_usdc <= CLAIM_BALANCE: # 大于XX才能提现
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 提现
-            transaction = invite_contract.functions.claimrewards( ).build_transaction(base_transaction)
-            logger.debug(f"claimrewards transaction: {transaction}")
+            try:
+                # 构建交易 - 提现
+                transaction = invite_contract.functions.claimrewards( ).build_transaction(base_transaction)
+                logger.debug(f"claimrewards transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # invite.claimrewards
@@ -2050,10 +2250,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- ticketbox_generate
             url = GAEA_API.rstrip('/')+'/api/ticket/generate?level='+str(level)
 
@@ -2151,9 +2350,14 @@ class GaeaDailyTask:
 
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-                # 构建交易 - 购卡合约金额授权
-                transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(base_transaction)
-                logger.debug(f"approve transaction: {transaction}")
+                try:
+                    # 构建交易 - 购卡合约金额授权
+                    transaction = usdc_contract.functions.approve(ticket_address, ticket_price).build_transaction(base_transaction)
+                    logger.debug(f"approve transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
                 # 发送交易
                 tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
@@ -2167,9 +2371,14 @@ class GaeaDailyTask:
 
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 购买
-            transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(base_transaction)
-            logger.debug(f"buyTickets transaction: {transaction}")
+            try:
+                # 构建交易 - 购买
+                transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(base_transaction)
+                logger.debug(f"buyTickets transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # ticket.buyTickets
@@ -2189,10 +2398,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # # 钱包地址
             # sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -2352,10 +2560,15 @@ class GaeaDailyTask:
 
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-                # 构建交易 - 情绪合约金额授权
-                MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
-                transaction = usdc_contract.functions.approve(emotion_address, MAX_UINT256).build_transaction(base_transaction)
-                logger.debug(f"approve transaction: {transaction}")
+                try:
+                    # 构建交易 - 情绪合约金额授权
+                    MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
+                    transaction = usdc_contract.functions.approve(emotion_address, MAX_UINT256).build_transaction(base_transaction)
+                    logger.debug(f"approve transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
                 # 发送交易
                 tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
@@ -2369,14 +2582,19 @@ class GaeaDailyTask:
 
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 情绪打卡
-            if ERA3_ONLINE_STAMP > current_timestamp:
-                transaction = emotion_contract.functions.emotions( emotion_int ).build_transaction(base_transaction)
-            elif EMOTION3_ONLINE_STAMP > current_timestamp:
-                transaction = emotion_contract.functions.emotions( sender_address, emotion_int ).build_transaction(base_transaction)
-            else:
-                transaction = emotion_contract.functions.bet( sender_address, emotion_int ).build_transaction(base_transaction)
-            logger.debug(f"emotions transaction: {transaction}")
+            try:
+                # 构建交易 - 情绪打卡
+                if ERA3_ONLINE_STAMP > current_timestamp:
+                    transaction = emotion_contract.functions.emotions( emotion_int ).build_transaction(base_transaction)
+                elif EMOTION3_ONLINE_STAMP > current_timestamp:
+                    transaction = emotion_contract.functions.emotions( sender_address, emotion_int ).build_transaction(base_transaction)
+                else:
+                    transaction = emotion_contract.functions.bet( sender_address, emotion_int ).build_transaction(base_transaction)
+                logger.debug(f"emotions transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # emotion.bet
@@ -2395,10 +2613,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- ticket_deeptrain
             url = GAEA_API.rstrip('/')+'/api/emotion/complete'
             json_data = {
@@ -2465,13 +2682,10 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(reward_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            # if reward_usdc < 5.0: # 余额大于5USDC显示绿色
-            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
-            # else:
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
             return reward_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward_clicker except: {error}")
+            return 0
 
     async def emotionclaimed_clicker(self, eth_address) -> None:
         try:
@@ -2508,16 +2722,21 @@ class GaeaDailyTask:
             reward_usdc = web3_obj.from_wei(reward_sender_usdc, 'mwei')
             logger.debug(f"reward_usdc: {reward_usdc}")
 
-            if reward_usdc < 5.0: # 余额大于5USDC再提现
+            if reward_usdc <= CLAIM_BALANCE: # 大于XX才能提现
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} reward_usdc: {reward_usdc}")
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 提现
-            transaction = reward_contract.functions.claim().build_transaction(base_transaction)
-            logger.debug(f"claim transaction: {transaction}")
+            try:
+                # 构建交易 - 提现
+                transaction = reward_contract.functions.claim().build_transaction(base_transaction)
+                logger.debug(f"claim transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # reward.claim
@@ -2538,10 +2757,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # -------------------------------------------------------------------------- deepchoice_list
             web3_obj = self._web3_instance
@@ -2574,10 +2792,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # # 钱包地址
             # sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -2694,10 +2911,15 @@ class GaeaDailyTask:
 
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-                # 构建交易 - 情绪合约金额授权
-                MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
-                transaction = usdc_contract.functions.approve(choice_address, MAX_UINT256).build_transaction(base_transaction)
-                logger.debug(f"approve transaction: {transaction}")
+                try:
+                    # 构建交易 - 情绪合约金额授权
+                    MAX_UINT256 = 2**256 - 1 # 无穷大 current_period_price
+                    transaction = usdc_contract.functions.approve(choice_address, MAX_UINT256).build_transaction(base_transaction)
+                    logger.debug(f"approve transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
                 # 发送交易
                 tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.approve
@@ -2711,9 +2933,14 @@ class GaeaDailyTask:
 
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 情绪打卡
-            transaction = choice_contract.functions.bet( sender_address, choice_int, soul_int ).build_transaction(base_transaction)
-            logger.debug(f"choices transaction: {transaction}")
+            try:
+                # 构建交易 - 情绪打卡
+                transaction = choice_contract.functions.bet( sender_address, choice_int, soul_int ).build_transaction(base_transaction)
+                logger.debug(f"choices transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # choice.bet
@@ -2732,10 +2959,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- ticket_deepchoice
             url = GAEA_API.rstrip('/')+'/api/choice/complete'
             json_data = {
@@ -2798,13 +3024,10 @@ class GaeaDailyTask:
             award_usdc = web3_obj.from_wei(award_sender_usdc, 'mwei')
             logger.debug(f"award_usdc: {award_usdc}")
 
-            # if award_usdc < 5.0: # 余额大于5USDC显示绿色
-            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
-            # else:
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
             return award_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward_clicker except: {error}")
+            return 0
 
     async def choiceclaimed_clicker(self, eth_address) -> None:
         try:
@@ -2837,16 +3060,21 @@ class GaeaDailyTask:
             award_usdc = web3_obj.from_wei(award_sender_usdc, 'mwei')
             logger.debug(f"award_usdc: {award_usdc}")
 
-            if award_usdc < 5.0: # 余额大于5USDC再提现
+            if award_usdc <= CLAIM_BALANCE: # 大于XX才能提现
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
                 return 'ERROR'
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} award_usdc: {award_usdc}")
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 提现
-            transaction = award_contract.functions.claim().build_transaction(base_transaction)
-            logger.debug(f"claim transaction: {transaction}")
+            try:
+                # 构建交易 - 提现
+                transaction = award_contract.functions.claim().build_transaction(base_transaction)
+                logger.debug(f"claim transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # award.claim
@@ -2866,10 +3094,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # # 钱包地址
             # sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -2904,10 +3131,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- generate
             url = GAEA_API.rstrip('/')+'/api/nft/generate'
 
@@ -2973,13 +3199,18 @@ class GaeaDailyTask:
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 铸造
-            if snftmint_id==0:
-                transaction = snftmint_contract.functions.mintNFT(nft_level,block_number,final_hash).build_transaction(base_transaction)
-                logger.debug(f"mintNFT transaction: {transaction}")
-            else:
-                transaction = snftmint_contract.functions.upgradeNFT(snftmint_id, nft_level,block_number,final_hash).build_transaction(base_transaction)
-                logger.debug(f"upgradeNFT transaction: {transaction}")
+            try:
+                # 构建交易 - 铸造
+                if snftmint_id==0:
+                    transaction = snftmint_contract.functions.mintNFT(nft_level,block_number,final_hash).build_transaction(base_transaction)
+                    logger.debug(f"mintNFT transaction: {transaction}")
+                else:
+                    transaction = snftmint_contract.functions.upgradeNFT(snftmint_id, nft_level,block_number,final_hash).build_transaction(base_transaction)
+                    logger.debug(f"upgradeNFT transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # snftmint.mintNFT
@@ -2998,10 +3229,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- snftlist
             url = GAEA_API.rstrip('/')+'/api/nft/list'
 
@@ -3039,10 +3269,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- snftoblate
             url = GAEA_API.rstrip('/')+'/api/nft/claimed'
             json_data = {
@@ -3086,10 +3315,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # # 钱包地址
             # sender_address = Web3().eth.account.from_key(self.client.prikey).address
@@ -3124,10 +3352,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- generate
             url = GAEA_API.rstrip('/')+'/api/nft/anniversary/generate'
 
@@ -3193,13 +3420,18 @@ class GaeaDailyTask:
             
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            # 构建交易 - 铸造
-            if anftmint_id==0:
-                transaction = anftmint_contract.functions.mintNFT(nft_ticket,block_number,final_hash).build_transaction(base_transaction)
-                logger.debug(f"mintNFT transaction: {transaction}")
-            else:
-                transaction = anftmint_contract.functions.upgradeNFT(anftmint_id, nft_ticket,block_number,final_hash).build_transaction(base_transaction)
-                logger.debug(f"upgradeNFT transaction: {transaction}")
+            try:
+                # 构建交易 - 铸造
+                if anftmint_id==0:
+                    transaction = anftmint_contract.functions.mintNFT(nft_ticket,block_number,final_hash).build_transaction(base_transaction)
+                    logger.debug(f"mintNFT transaction: {transaction}")
+                else:
+                    transaction = anftmint_contract.functions.upgradeNFT(anftmint_id, nft_ticket,block_number,final_hash).build_transaction(base_transaction)
+                    logger.debug(f"upgradeNFT transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # anftmint.mintNFT
@@ -3218,10 +3450,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- anftlist
             url = GAEA_API.rstrip('/')+'/api/nft/anniversary/list'
 
@@ -3259,10 +3490,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- anftoblate
             url = GAEA_API.rstrip('/')+'/api/nft/anniversary/claimed'
             json_data = {
@@ -3416,9 +3646,14 @@ class GaeaDailyTask:
 
             # 使用公共函数构建基础交易参数
             base_transaction = self.build_base_transaction(web3_obj, sender_address, BNB_CHAINID)
-            # 构建交易 - 铸造
-            transaction = laurelnftmint_contract.functions.purchase(1, nft_zone,nft_number,final_hash).build_transaction(base_transaction)
-            logger.debug(f"purchase transaction: {transaction}")
+            try:
+                # 构建交易 - 铸造
+                transaction = laurelnftmint_contract.functions.purchase(1, nft_zone,nft_number,final_hash).build_transaction(base_transaction)
+                logger.debug(f"purchase transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
 
             # 发送交易
             tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # laurelnftmint.purchase
@@ -3432,6 +3667,107 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftmint_clicker except: {error}")
             return "ERROR"
 
+    async def laurelnftlottery_generate_clicker(self, eth_address, phaseid, tokenid) -> None:
+        try:
+            headers = self.getheaders()
+            headers["Authorization"] = f"Bearer {eth_address}"
+            # -------------------------------------------------------------------------- lottery/generate/1
+            url = LAUREL_API.rstrip('/')+f'/api/nft/lottery/generate/{phaseid}/{tokenid}'
+
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker url: {url}")
+            response = await self.client.make_request(
+                method='GET', 
+                url=url, 
+                headers=headers,
+            )
+            if 'ERROR' in response:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker {response}")
+                raise Exception(response)
+            # logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker {response}")
+
+            code = response.get('code', None)
+            if code in [200, 201]:
+                logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker => {response['data']}")
+                return response['data']
+            else:
+                message = response.get('msg', None)
+                if message is None:
+                    message = f"{response.get('detail', None)}" 
+                if message.find('completed') > 0:
+                    logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker => {message}")
+                    return message
+                else:
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker ERROR: {message}")
+                    raise Exception(message)
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_generate_clicker except: {error}")
+
+    async def laurelnftlottery_clicker(self, eth_address, phaseid, tokenid, packeddata, signature) -> None:
+        try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_clicker eth_address: {eth_address[:10]}")
+            # -------------------------------------------------------------------------- laurelnftmint
+            web3_obj = Web3(Web3.HTTPProvider(BNB_WEB3_RPC))
+            if not BNB_WEB3_RPC:
+                raise Exception("Web3 rpc not found")
+            if BNB_CHAINID in [56, 97]:
+                web3_obj.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+            # 连接rpc节点
+            if not web3_obj.is_connected():
+                logger.error(f"Unable to connect to the network: {BNB_WEB3_RPC}")
+                raise Exception("Failed to eth.is_connected.")
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            if sender_balance_eth == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
+
+            # NFT抽奖合约地址
+            laurelnftlottery_address = Web3.to_checksum_address(BNB_LNFTLOTTERY)
+            laurelnftlottery_contract = web3_obj.eth.contract(address=laurelnftlottery_address, abi=contract_abi_lottery)
+
+            # 当前NFT等级
+            isUsed = laurelnftlottery_contract.functions.tokenUsed(phaseid, tokenid).call()
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} isUsed: {isUsed}")
+            if isUsed:
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} tokenid: {tokenid} | NFT already lottery")
+                return "ERROR"
+
+            # 使用公共函数构建基础交易参数
+            base_transaction = self.build_base_transaction(web3_obj, sender_address, BNB_CHAINID)
+            try:
+                # 构建交易 - 抽奖
+                transaction = laurelnftlottery_contract.functions.lottery(phaseid, packeddata, signature).build_transaction(base_transaction)
+                logger.debug(f"lottery transaction: {transaction}")
+            except Exception as e:
+                decoded_error = self.decode_revert_reason(e)
+                logger.error(f"Decoded error: {decoded_error}")
+                raise Exception(decoded_error)
+
+            # 发送交易
+            tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # laurelnftlottery.lottery
+            if tx_success == False:
+                logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
+                raise Exception("Failed to send_transaction.")
+
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The lottery transaction send successfully! - tokenid: {tokenid} packeddata: {packeddata}")
+            return "SUCCESS"
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery_clicker except: {error}")
+            return "ERROR"
+
     ## 汇聚
     async def fundsreward_clicker(self, eth_address) -> None:
         try:
@@ -3443,10 +3779,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # -------------------------------------------------------------------------- balanceOf
             web3_obj = self._web3_instance
@@ -3485,10 +3820,6 @@ class GaeaDailyTask:
 
             logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - usdc: {sender_usdc} sxp: {sender_sxp}")
 
-            # if sender_usdc < 5.0: # 余额大于5USDC显示绿色
-            #     logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} sender_usdc: {sender_usdc}")
-            # else:
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} sender_usdc: {sender_usdc}")
             return sender_usdc # 'SUCCESS'
         except Exception as error:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundsreward_clicker except: {error}")
@@ -3504,10 +3835,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             
             # -------------------------------------------------------------------------- balanceOf
             web3_obj = self._web3_instance
@@ -3563,9 +3893,14 @@ class GaeaDailyTask:
                 
                 # 使用公共函数构建基础交易参数
                 base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-                # 构建交易 - 转账
-                transaction = usdc_contract.functions.transfer(pooling_address, balance_usdc).build_transaction(base_transaction)
-                logger.debug(f"transfer transaction: {transaction}")
+                try:
+                    # 构建交易 - 转账
+                    transaction = usdc_contract.functions.transfer(pooling_address, balance_usdc).build_transaction(base_transaction)
+                    logger.debug(f"transfer transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
                 # 发送交易
                 tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # usdc.transfer
@@ -3585,9 +3920,14 @@ class GaeaDailyTask:
             # if 100000000 < sender_balance_sxp and pooling_addr != '': # 大于100开始归集SXP
             #     # 使用公共函数构建基础交易参数
             #     base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            #     # 构建交易 - 转账
-            #     transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(base_transaction)
-            #     logger.debug(f"transfer transaction: {transaction}")
+            #     try:
+            #         # 构建交易 - 转账
+            #         transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(base_transaction)
+            #         logger.debug(f"transfer transaction: {transaction}")
+            #     except Exception as e:
+            #         decoded_error = self.decode_revert_reason(e)
+            #         logger.error(f"Decoded error: {decoded_error}")
+            #         raise Exception(decoded_error)
 
             #     # 发送交易
             #     tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # sxp.transfer
@@ -3610,10 +3950,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- checkin
             url = GAEA_API.rstrip('/')+'/api/mission/complete-mission'
             json_data = {
@@ -3656,10 +3995,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- signin
             url = GAEA_API.rstrip('/')+'/api/signin/complete'
             json_data = {
@@ -3702,10 +4040,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- referral_list
             url = GAEA_API.rstrip('/')+'/api/reward/referral-list'
 
@@ -3743,10 +4080,9 @@ class GaeaDailyTask:
             if len(headers.get('Authorization', None)) < 50:
                 # -------------------------------------------------------------------------- login
                 login_response = await self.login_clicker()
-                self.client.token = login_response.get('token', None)
-                set_data_for_token(self.client.runname, self.client.id, self.client.token)
-                self.client.userid = login_response.get('user_info', None).get('uid', None)
-                set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
             # -------------------------------------------------------------------------- referral_complete
             url = GAEA_API.rstrip('/')+'/api/reward/referral-complete'
 
@@ -3883,22 +4219,18 @@ class GaeaDailyTask:
     @helper
     async def daily_clicker_login(self):
         try:
-            if len(self.client.token) > 5:
+            if is_valid_jwt_format(self.client.token) and is_token_valid(self.client.token): # 验证token格式 验证token是否过期
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Already login")
                 return "SUCCESS"
             
             # -------------------------------------------------------------------------- login
             clicker_response = await self.login_clicker()
-            if clicker_response is None:
-                return "ERROR"
+            if len(clicker_response.get('token','')) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {clicker_response}")
+                raise Exception(clicker_response)
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login response: {clicker_response}")
             
-            self.client.token = clicker_response.get('token', None)
-            set_data_for_token(self.client.runname, self.client.id, self.client.token)
-            self.client.userid = clicker_response.get('user_info', None).get('uid', None)
-            set_data_for_userid(self.client.runname, self.client.id, self.client.userid)
-
-            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Login successfully - userinfo: {clicker_response['user_info']}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Login successfully - userid: {self.client.userid}")
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_login except: {error}")
@@ -4372,7 +4704,7 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} godhoodreward response: {clicker_response}")
             
-            if clicker_response < 10.0: # 余额大于10USDC显示绿色
+            if clicker_response < CLAIM_BALANCE: # 大于XX显示绿色
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             else:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
@@ -4449,7 +4781,7 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} emotionreward response: {clicker_response}")
             
-            if clicker_response < 5.0: # 余额大于5USDC显示绿色
+            if clicker_response < CLAIM_BALANCE: # 大于XX显示绿色
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             else:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
@@ -4526,7 +4858,7 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choicereward response: {clicker_response}")
             
-            if clicker_response < 5.0: # 余额大于5USDC显示绿色
+            if clicker_response < CLAIM_BALANCE: # 大于XX显示绿色
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             else:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
@@ -4893,6 +5225,40 @@ class GaeaDailyTask:
             return f"ERROR: {error}"
 
     @helper
+    async def daily_clicker_laurelnftinfo(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker() # laurelnftinfo
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
+            eth_address = clicker_response['eth_address']
+            if eth_address is None or eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} eth_address: {eth_address[:10]}")
+            
+            # -------------------------------------------------------------------------- laurelnftinfo
+            nfttokenId = await self.laurelnft_ismint_clicker(eth_address)
+            if nfttokenId > 0: # 已铸造
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | NFT already minted.")
+                return "SUCCESS"
+            elif nfttokenId==0: # 未铸造
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | No NFT")
+                return "SUCCESS"
+            else:
+                raise Exception("nfttokenId error")
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_laurelnftinfo except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
     async def daily_clicker_laurelnftmint(self):
         try:
             if len(self.client.token) == 0:
@@ -4903,27 +5269,17 @@ class GaeaDailyTask:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"
             
-            # -------------------------------------------------------------------------- session
-            clicker_response = await self.session_clicker() # laurelnftmint
-            if clicker_response is None:
-                return "ERROR"
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
-            
-            eth_address = clicker_response['eth_address']
-            if eth_address is None or eth_address == "":
-                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
-                return "ERROR"
-            
-            delay = random.randint(10, 20)
-            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
-            await asyncio.sleep(delay)
+            # --------------------------------------------------------------------------
+            # 钱包地址
+            eth_address = Web3().eth.account.from_key(self.client.prikey).address
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {eth_address[:10]}")
             
             # -------------------------------------------------------------------------- laurelnftmint
             nfttokenId = await self.laurelnft_ismint_clicker(eth_address)
             if nfttokenId > 0: # 已铸造
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | NFT already minted.")
                 return "SUCCESS"
-            elif nfttokenId==0: # 可铸造
+            elif nfttokenId==0: # 未铸造
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | Start minting NFT")
                 # -------------------------------------------------------------------------- generate
                 clicker_response = await self.laurelnft_generate_clicker(eth_address)
@@ -4948,6 +5304,54 @@ class GaeaDailyTask:
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_laurelnftmint except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_laurelnftlottery(self):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            # --------------------------------------------------------------------------
+            # 钱包地址
+            eth_address = Web3().eth.account.from_key(self.client.prikey).address
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {eth_address[:10]}")
+            
+            # -------------------------------------------------------------------------- laurelnftlottery
+            nfttokenId = await self.laurelnft_ismint_clicker(eth_address)
+            if nfttokenId==0: # 未铸造
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | No NFT")
+                return "SUCCESS"
+            elif nfttokenId > 0: # 已铸造
+                logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nfttokenId: {nfttokenId} | Start lottery")
+                # -------------------------------------------------------------------------- lottery_generate
+                clicker_response = await self.laurelnftlottery_generate_clicker(eth_address,1,nfttokenId)
+                if clicker_response is None:
+                    return "ERROR"
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftgenerate packeddata: {clicker_response['packeddata']}")  # {'phaseid': 1, 'packeddata': 33203269, 'signature': '0x46fcb058ce'}
+                if len(self.client.prikey) in [64,66]:
+                    packeddata = clicker_response['packeddata']
+                    signature = clicker_response['signature']
+                    # -------------------------------------------------------------------------- laurelnftlottery
+                    response = await self.laurelnftlottery_clicker(eth_address, 1, nfttokenId, packeddata, signature)
+                    if response == "ERROR":
+                        return "ERROR"
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery response: {response}")
+                    
+                    delay = random.randint(10, 20)
+                    logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} laurelnftlottery delay: {delay} seconds")
+                    await asyncio.sleep(delay)
+            else:
+                raise Exception("nfttokenId error")
+            
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_laurelnftlottery except: {error}")
             return f"ERROR: {error}"
 
     @helper
@@ -5273,7 +5677,7 @@ class GaeaDailyTask:
                 return "ERROR"
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundsreward response: {clicker_response}")
             
-            if clicker_response < 5.0: # 余额大于5USDC显示绿色
+            if clicker_response < CLAIM_BALANCE: # 大于XX显示绿色
                 logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
             else:
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} | eth_address: {eth_address[:10]} balance: {clicker_response}")
@@ -6009,6 +6413,9 @@ class GaeaDailyTask:
             if eth_address is None or eth_address == "":
                 # logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
                 return "ERROR"
+            
+            if task == '1':  # no deeptrain
+                return "SUCCESS"
             
             # -------------------------------------------------------------------------- deeptrain
             clicker_response = await self.is_deeptrain_clicker(eth_address)
