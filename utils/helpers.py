@@ -33,6 +33,84 @@ def get_data_for_token(name):
     datas = get_file_content(file)
     return datas
 
+# ----------------------------------------------------------------------------------------------------------
+
+# 添加跨平台文件锁功能
+def acquire_shared_lock(file_obj, timeout=10):
+    """获取共享锁，跨平台兼容"""
+    if platform.system() != 'Windows':
+        import fcntl
+        fcntl.flock(file_obj.fileno(), fcntl.LOCK_SH)
+    else:
+        import msvcrt
+        # 在Windows上，通过不断尝试打开文件来模拟锁机制
+        start_time = time.time()
+        while True:
+            try:
+                # 检查是否可以访问文件
+                fd = os.open(file_obj.name, os.O_RDONLY)
+                os.close(fd)
+                break
+            except OSError:
+                if time.time() - start_time > timeout:
+                    raise TimeoutError(f"Could not acquire shared lock on {file_obj.name} within {timeout} seconds")
+                time.sleep(0.1)
+
+def acquire_exclusive_lock(file_obj, timeout=10):
+    """获取独占锁，跨平台兼容"""
+    if platform.system() != 'Windows':
+        import fcntl
+        fcntl.flock(file_obj.fileno(), fcntl.LOCK_EX)
+    else:
+        import msvcrt
+        start_time = time.time()
+        while True:
+            try:
+                # 尝试打开文件进行独占访问
+                fd = os.open(file_obj.name, os.O_RDWR | getattr(os, 'O_BINARY', 0))
+                try:
+                    # 尝试锁定整个文件
+                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # 锁定第一个字节
+                    os.lseek(fd, 0, os.SEEK_SET)  # 移动到文件开头
+                    break
+                finally:
+                    os.close(fd)
+            except (OSError, IOError):
+                if time.time() - start_time > timeout:
+                    raise TimeoutError(f"Could not acquire exclusive lock on {file_obj.name} within {timeout} seconds")
+                time.sleep(0.1)
+
+def safe_read_file_with_lock(file_path, encoding='utf-8'):
+    """安全地读取文件内容，带锁机制"""
+    if platform.system() != 'Windows':
+        import fcntl
+        with open(file_path, 'r', encoding=encoding) as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH)  # 共享锁
+            return f.readlines()
+    else: # Windows平台：简单地读取文件，因为Python的open会自动处理基本的并发问题
+        with open(file_path, 'r', encoding=encoding) as f:
+            return f.readlines()
+
+def safe_write_file_with_lock(file_path, content, encoding='utf-8'):
+    """安全地写入文件，带锁机制"""
+    temp_file_path = file_path + '.tmp'
+    
+    # 写入临时文件
+    with open(temp_file_path, 'w', encoding=encoding) as f:
+        f.writelines(content)
+    
+    if platform.system() != 'Windows':
+        import fcntl
+        # 使用独占锁重命名临时文件到目标文件
+        with open(file_path, 'r', encoding=encoding) as f_target:
+            fcntl.flock(f_target.fileno(), fcntl.LOCK_EX)  # 独占锁
+            os.replace(temp_file_path, file_path)  # 原子操作替换文件
+    else: # Windows平台：直接替换文件，因为os.replace在Windows上也是原子操作
+        try:
+            os.replace(temp_file_path, file_path)
+        except OSError:
+            os.rename(temp_file_path, file_path)
+
 def _update_token_line(file_path, line_id, field_index, new_value):
     """
     通用的行更新函数，用于更新指定行的特定字段
@@ -47,12 +125,9 @@ def _update_token_line(file_path, line_id, field_index, new_value):
     temp_file_path = file_path + '.tmp'
     
     try:
-        with open(file_path, 'r', encoding='utf-8') as f_read:
-            if platform.system() != 'Windows':
-                import fcntl
-                fcntl.flock(f_read.fileno(), fcntl.LOCK_SH)  # 共享锁读取原文件
-            lines = f_read.readlines()
-            
+        # 读取原始文件内容
+        lines = safe_read_file_with_lock(file_path)
+        
         if line_id < 1 or line_id > len(lines):
             raise ValueError(f"Line {line_id} is out of range.")
         
@@ -70,16 +145,8 @@ def _update_token_line(file_path, line_id, field_index, new_value):
         updated_line = ','.join(parts) + '\n'
         lines[line_id - 1] = updated_line
         
-        # 将修改后的内容写入临时文件
-        with open(temp_file_path, 'w', encoding='utf-8') as f_write:
-            f_write.writelines(lines)
-        
-        # 使用独占锁重命名临时文件到目标文件
-        with open(file_path, 'r', encoding='utf-8') as f_target:
-            if platform.system() != 'Windows':
-                import fcntl
-                fcntl.flock(f_target.fileno(), fcntl.LOCK_EX)  # 独占锁
-            os.replace(temp_file_path, file_path)  # 原子操作替换文件
+        # 安全写入更新后的内容
+        safe_write_file_with_lock(file_path, lines)
             
     except FileNotFoundError:
         raise FileNotFoundError(f"File {file_path} not found")
@@ -200,6 +267,8 @@ def is_token_valid(token):
     except Exception as e:
         print(f"is_token_valid error: {e}")
         return False
+
+# ----------------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
     print("emotion:"+get_emotion_for_txt(20))
