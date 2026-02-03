@@ -147,7 +147,7 @@ async def gaea_run_modules(module, runname, runeq, rungt, runlt, runthread, runs
     logger.info(f"runname: {runname} runeq: {runeq} rungt: {rungt} runlt: {runlt}")
 
     # 根据 runshuffle 是否随机乱序
-    if runshuffle>0:
+    if runshuffle:
         # datas随机乱序
         data_pairs = list(enumerate(datas, start=1))
         random.shuffle(data_pairs)
@@ -496,24 +496,26 @@ if __name__ == '__main__':
     # 初始化参数
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--auto', type=bool, default=False, action=argparse.BooleanOptionalAction)
-    parser.add_argument('-r', '--run', type=int, default=0)
     parser.add_argument('-d', '--debug', type=bool, default=False, action=argparse.BooleanOptionalAction)
+    # 文件参数
     parser.add_argument('-n', '--name', type=str, default='')
     parser.add_argument('-e', '--equal', nargs='+', type=int, default=[])
     parser.add_argument('-g', '--greater', type=int, default=0)
     parser.add_argument('-l', '--less', type=int, default=0)
+    # 运行参数
+    parser.add_argument('-r', '--run', type=int, default=0)
     parser.add_argument('-t', '--thread', type=int, default=1)
-    parser.add_argument('-s', '--shuffle', type=int, default=1)
+    parser.add_argument('-s', '--shuffle', type=bool, default=False, action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
     run_auto = bool(args.auto)
-    run_run = int(args.run)
     run_debug = bool(args.debug)
     run_name = str(args.name)
     run_eq = list(args.equal)
     run_gt = int(args.greater)
     run_lt = int(args.less)
+    run_run = int(args.run)
     run_thread = int(args.thread)
-    run_shuffle = int(args.shuffle)
+    run_shuffle = bool(args.shuffle)
 
     # 日志级别
     log_level = "DEBUG" if run_debug else "INFO"
