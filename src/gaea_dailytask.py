@@ -3863,10 +3863,14 @@ class GaeaDailyTask:
             sxp_address = Web3.to_checksum_address(CONTRACT_SXP)
             sxp_contract = web3_obj.eth.contract(address=sxp_address, abi=contract_abi_usdc)
 
-            # 归集地址选择
-            pooling_addr = ''
+            # 归集配置
             pooling_addr_dict = json.loads(POOLING_ADDRESS)
             pooling_addr_items = pooling_addr_dict.get(self.client.runname, None)
+            if pooling_addr_items is None:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Invalid POOLING_ADDRESS")
+                raise Exception(f"Invalid POOLING_ADDRESS")
+            # 归集地址选择
+            pooling_addr = ''
             for pooling_addr_item in pooling_addr_items:
                 if pooling_addr_item.get('min', 0) <= self.client.id <= pooling_addr_item.get('max', 0):
                     pooling_addr = pooling_addr_item.get('address', None)
