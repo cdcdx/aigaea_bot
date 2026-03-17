@@ -1547,7 +1547,7 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} choiceperiod_clicker except: {error}")
 
     # -------------------------------------------------------------------------- 任务
-    
+
     ## 任务列表
     async def missionlist_clicker(self) -> None:
         try:
@@ -1935,7 +1935,7 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} visionclaim_clicker except: {error}")
 
     # -------------------------------------------------------------------------- 上链
-    
+
     ## 买神格卡
     async def godhoodid_buy_clicker(self) -> None:
         try:
@@ -4446,7 +4446,7 @@ class GaeaDailyTask:
             if len(self.client.token) == 0:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
                 return "ERROR"
-    
+
             if len(self.client.prikey) not in [64,66]:
                 logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
                 return "ERROR"

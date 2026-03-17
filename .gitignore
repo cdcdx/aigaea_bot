@@ -1,8 +1,10 @@
 __pycache__
 .idea/
 .vscode/
+.tools/
 .venv/
 venv/
+.backup/
 backup/
 data/
 .env
