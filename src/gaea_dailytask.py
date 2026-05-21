@@ -15,14 +15,14 @@ from web3 import Web3
 from web3.middleware import ExtraDataToPOAMiddleware
 
 from src.gaea_client import GaeaClient
-from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_emotion3, contract_abi_reward, contract_abi_reward3, contract_abi_invite, contract_abi_mint, contract_abi_choice, contract_abi_award, contract_abi_ticket, contract_abi_lottery
+from utils.contract_abi import contract_abi_usdc, contract_abi_emotion, contract_abi_emotion2, contract_abi_emotion3, contract_abi_reward, contract_abi_reward3, contract_abi_invite, contract_abi_nft, contract_abi_mint, contract_abi_choice, contract_abi_award, contract_abi_ticket, contract_abi_lottery
 from utils.decorators import helper
 from utils.helpers import is_valid_jwt_format, is_token_valid
 from utils.helpers import get_data_for_token, set_data_for_token, set_data_for_userid, get_emotion_for_txt, get_choice_for_txt
 from utils.services import get_captcha_key, generate_random_groups
 from config import get_envsion, set_envsion, GAEA_API, ERA3_ONLINE_STAMP, EMOTION3_ONLINE_STAMP, SNAIL_UNIT, CLAIM_BALANCE
 from config import CAPTCHA_KEY, REFERRAL_CODE, REFERRAL_ADDRESS, POOLING_ADDRESS
-from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_TICKET, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT
+from config import WEB3_RPC, WEB3_RPC_FIXED, WEB3_CHAINID, CONTRACT_USDC, CONTRACT_SXP, CONTRACT_TICKET, CONTRACT_INVITE, CONTRACT_EMOTION, CONTRACT_CHOICE, CONTRACT_REWARD, CONTRACT_AWARD, CONTRACT_SNFTMINT, CONTRACT_ANFTMINT, CONTRACT_SNFT, CONTRACT_ANFT
 from config import LAUREL_API, BNB_WEB3_RPC, BNB_CHAINID, BNB_LNFTMINT, BNB_LNFTLOTTERY
 
 def connect_web3_rpc():
@@ -3946,6 +3946,93 @@ class GaeaDailyTask:
             logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundspooling_clicker except: {error}")
             return 0
 
+    async def nftspooling_clicker(self, eth_address, is_all=False) -> None:
+        try:
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundspooling_clicker ERROR: Incorrect private key")
+                raise Exception(f"Incorrect private key")
+            
+            headers = self.getheaders()
+            if len(headers.get('Authorization', None)) < 50:
+                # -------------------------------------------------------------------------- login
+                login_response = await self.login_clicker()
+                if len(login_response) > 0:
+                    logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} login_clicker {login_response}")
+                    raise Exception(login_response)
+            
+            # -------------------------------------------------------------------------- balanceOf
+            web3_obj = self._web3_instance
+            
+            current_timestamp = int(time.time())
+            logger.debug(f"current_timestamp: {current_timestamp}")
+
+            # 钱包地址
+            sender_address = web3_obj.eth.account.from_key(self.client.prikey).address
+            sender_balance_eth = web3_obj.eth.get_balance(sender_address)
+            if sender_balance_eth == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} 账户余额为0")
+                return "ERRRO"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} balance: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH")
+            if eth_address.lower() != sender_address.lower():
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} != eth_address: {eth_address[:10]}")
+                raise Exception("Does not match the binding address.")
+
+            # NFT合约地址
+            snft_address = Web3.to_checksum_address(CONTRACT_SNFT)
+            snft_contract = web3_obj.eth.contract(address=snft_address, abi=contract_abi_nft)
+
+            # 归集配置
+            pooling_addr_dict = json.loads(POOLING_ADDRESS)
+            pooling_addr_items = pooling_addr_dict.get(self.client.runname, None)
+            if pooling_addr_items is None:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Invalid POOLING_ADDRESS")
+                raise Exception(f"Invalid POOLING_ADDRESS")
+            # 归集地址选择
+            pooling_addr = ''
+            for pooling_addr_item in pooling_addr_items:
+                if pooling_addr_item.get('min', 0) <= self.client.id <= pooling_addr_item.get('max', 0):
+                    pooling_addr = pooling_addr_item.get('address', None)
+                    break
+            if pooling_addr == '' or len(pooling_addr) != 42:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} ERROR: Incorrect pooling address")
+                raise Exception(f"Incorrect pooling address")
+            pooling_address = Web3.to_checksum_address(pooling_addr)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} sender_address: {sender_address[:10]} pooling_address: {pooling_address}")
+            
+            # NFT账户余额
+            sender_nft = snft_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_nft: {sender_nft}")
+            
+            if sender_nft > 0:
+                # 持有SNFT的账户才进行归集，并且记录NFTID
+                sender_nftid = snft_contract.functions.tokenOfOwnerByIndex(sender_address, 0).call()
+                logger.debug(f"sender_nftid: {sender_nftid}")
+                
+                # # 开始归集
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
+                try:
+                    # 构建交易 - 转账
+                    transaction = snft_contract.functions.transferFrom(sender_address, pooling_address, sender_nftid).build_transaction(base_transaction)
+                    logger.debug(f"transferFrom transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e)
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
+
+                # 发送交易
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # snft.transferFrom
+                if tx_success == False:
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
+                    raise Exception("Failed to send_transaction.")
+
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transferFrom transaction send successfully! - snft: {sender_nft}")
+            
+            return sender_nft
+        except Exception as error:
+            logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} fundspooling_clicker except: {error}")
+            return 0
+
     # -------------------------------------------------------------------------- 过期任务
 
     async def checkin_clicker(self) -> None:
@@ -5737,6 +5824,55 @@ class GaeaDailyTask:
             return "SUCCESS"
         except Exception as error:
             logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_fundspooling except: {error}")
+            return f"ERROR: {error}"
+
+    @helper
+    async def daily_clicker_nftspooling(self, is_all=False):
+        try:
+            if len(self.client.token) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Not login")
+                return "ERROR"
+            
+            if len(self.client.prikey) not in [64,66]:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Incorrect private key")
+                return "ERROR"
+            
+            if len(json.loads(POOLING_ADDRESS)) == 0:
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} POOLING_ADDRESS is Null")
+                raise Exception("POOLING_ADDRESS is Null")
+            
+            # -------------------------------------------------------------------------- session
+            clicker_response = await self.session_clicker() # nftspooling
+            if clicker_response is None:
+                return "ERROR"
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session response: {clicker_response}")
+            
+            eth_address = clicker_response['eth_address']
+            if eth_address is None or eth_address == "":
+                logger.error(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} Please bind the eth_address first")
+                return "ERROR"
+            
+            delay = random.randint(10, 20)
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} session delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
+            # -------------------------------------------------------------------------- nftspooling
+            clicker_response = await self.nftspooling_clicker(eth_address, is_all)
+            if clicker_response is None:
+                return "ERROR"
+            logger.info(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftspooling response: {clicker_response}")
+
+            # if clicker_response>0:
+            #     delay = random.randint(SNAIL_UNIT, SNAIL_UNIT*4) # nftspooling
+            #     logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftspooling delay: {delay} seconds")
+            #     await asyncio.sleep(delay)
+            delay = random.randint(60, 90) # nftspooling
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} nftspooling delay: {delay} seconds")
+            await asyncio.sleep(delay)
+            
+            return "SUCCESS"
+        except Exception as error:
+            logger.debug(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} daily_clicker_nftspooling except: {error}")
             return f"ERROR: {error}"
 
     @helper

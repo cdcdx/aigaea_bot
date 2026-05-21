@@ -31,7 +31,7 @@ from src.functions import (
     gaea_clicker_missionconnect, gaea_clicker_missioncomplete,
     gaea_clicker_milestoneburn, gaea_clicker_milestoneclaim,
     gaea_clicker_visionburn, gaea_clicker_visionclaim,
-    gaea_clicker_fundsreward, gaea_clicker_fundspooling, gaea_clicker_fundspooling_all,
+    gaea_clicker_fundsreward, gaea_clicker_fundspooling, gaea_clicker_fundspooling_all, gaea_clicker_nftspooling,
     gaea_clicker_checkin, gaea_clicker_signin, 
     gaea_clicker_dailycheckin, gaea_clicker_medalcheckin, 
     gaea_clicker_aitrain, gaea_clicker_traincheckin,
@@ -85,6 +85,7 @@ MODULE_MAPPING = {
     'gaea_clicker_fundsreward':       gaea_clicker_fundsreward,
     'gaea_clicker_fundspooling':      gaea_clicker_fundspooling,
     'gaea_clicker_fundspooling_all':  gaea_clicker_fundspooling_all,
+    'gaea_clicker_nftspooling':       gaea_clicker_nftspooling,
     # 'gaea_clicker_checkin':           gaea_clicker_checkin,
     # 'gaea_clicker_signin':            gaea_clicker_signin,
     'gaea_clicker_dailycheckin':      gaea_clicker_dailycheckin,
@@ -418,8 +419,9 @@ def handle_funds_tasks(runname, runeq, rungt, runlt, runthread, runshuffle):
             Choice("🔥 Funds tasks - choicereward",                 'gaea_clicker_choicereward',       shortcut_key="4"),
             Choice("🐌 Funds tasks - choiceclaimed",                'gaea_clicker_choiceclaimed',      shortcut_key="5"),
             Choice("🔥 Funds tasks - fundsreward",                  'gaea_clicker_fundsreward',        shortcut_key="6"),
-            Choice("🐌 Funds tasks - fundspooling",                 'gaea_clicker_fundspooling',       shortcut_key="7"),
-            Choice("🐌 Funds tasks - fundspooling_all",             'gaea_clicker_fundspooling_all',   shortcut_key="8"),
+            Choice("🐌 Funds tasks - fundspooling",                 'gaea_clicker_fundspooling',       shortcut_key="7"), # 归集
+            Choice("🐌 Funds tasks - fundspooling_all",             'gaea_clicker_fundspooling_all',   shortcut_key="8"), # 归集
+            Choice("🐌 Funds tasks - nftspooling",                  'gaea_clicker_nftspooling',        shortcut_key="9"), # 归集
             Choice("⬅ Back", "back", shortcut_key="0")
         ],
         use_shortcuts=True,

@@ -253,6 +253,12 @@ async def gaea_clicker_fundspooling_all(runname, id, userid, email, passwd, prik
     daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
     return await daily_task.daily_clicker_fundspooling(True)
 
+async def gaea_clicker_nftspooling(runname, id, userid, email, passwd, prikey, token, proxy):
+    if platform.system().lower() == 'windows':
+        os.system("title gaea-nftspooling")
+    daily_task = GaeaDailyTask(GaeaClient(runname=runname, id=id, userid=userid, email=email, passwd=passwd, prikey=prikey, token=token, proxy=proxy))
+    return await daily_task.daily_clicker_nftspooling()
+
 async def gaea_clicker_dailycheckin(runname, id, userid, email, passwd, prikey, token, proxy):
     if platform.system().lower() == 'windows':
         os.system("title gaea-dailycheckin")
