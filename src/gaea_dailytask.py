@@ -2025,7 +2025,8 @@ class GaeaDailyTask:
                 transaction = invite_contract.functions.inviter( referral_address ).build_transaction(base_transaction)
                 logger.debug(f"inviter transaction: {transaction}")
             except Exception as e:
-                decoded_error = self.decode_revert_reason(e)
+                decoded_error = self.decode_revert_reason(e) #
+                logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH / sender_balance_usdc: {sender_balance_usdc} USDC")
                 logger.error(f"Decoded error: {decoded_error}")
                 raise Exception(decoded_error)
 
@@ -2228,7 +2229,8 @@ class GaeaDailyTask:
                 transaction = invite_contract.functions.claimrewards( ).build_transaction(base_transaction)
                 logger.debug(f"claimrewards transaction: {transaction}")
             except Exception as e:
-                decoded_error = self.decode_revert_reason(e)
+                decoded_error = self.decode_revert_reason(e) #
+                logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH / reward_usdc: {reward_usdc} USDC")
                 logger.error(f"Decoded error: {decoded_error}")
                 raise Exception(decoded_error)
 
@@ -2376,7 +2378,8 @@ class GaeaDailyTask:
                 transaction = ticket_contract.functions.buyTickets(tick_level,tick_rebate,final_hash).build_transaction(base_transaction)
                 logger.debug(f"buyTickets transaction: {transaction}")
             except Exception as e:
-                decoded_error = self.decode_revert_reason(e)
+                decoded_error = self.decode_revert_reason(e) #
+                logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH / sender_balance_usdc: {sender_balance_usdc} USDC")
                 logger.error(f"Decoded error: {decoded_error}")
                 raise Exception(decoded_error)
 
@@ -2592,7 +2595,8 @@ class GaeaDailyTask:
                     transaction = emotion_contract.functions.bet( sender_address, emotion_int ).build_transaction(base_transaction)
                 logger.debug(f"emotions transaction: {transaction}")
             except Exception as e:
-                decoded_error = self.decode_revert_reason(e)
+                decoded_error = self.decode_revert_reason(e) #
+                logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH / sender_balance_usdc: {sender_balance_usdc} USDC")
                 logger.error(f"Decoded error: {decoded_error}")
                 raise Exception(decoded_error)
 
@@ -2734,7 +2738,8 @@ class GaeaDailyTask:
                 transaction = reward_contract.functions.claim().build_transaction(base_transaction)
                 logger.debug(f"claim transaction: {transaction}")
             except Exception as e:
-                decoded_error = self.decode_revert_reason(e)
+                decoded_error = self.decode_revert_reason(e) #
+                logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH / reward_usdc: {reward_usdc} USDC")
                 logger.error(f"Decoded error: {decoded_error}")
                 raise Exception(decoded_error)
 
@@ -2938,7 +2943,8 @@ class GaeaDailyTask:
                 transaction = choice_contract.functions.bet( sender_address, choice_int, soul_int ).build_transaction(base_transaction)
                 logger.debug(f"choices transaction: {transaction}")
             except Exception as e:
-                decoded_error = self.decode_revert_reason(e)
+                decoded_error = self.decode_revert_reason(e) #
+                logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH / sender_balance_usdc: {sender_balance_usdc} USDC")
                 logger.error(f"Decoded error: {decoded_error}")
                 raise Exception(decoded_error)
 
@@ -3072,7 +3078,8 @@ class GaeaDailyTask:
                 transaction = award_contract.functions.claim().build_transaction(base_transaction)
                 logger.debug(f"claim transaction: {transaction}")
             except Exception as e:
-                decoded_error = self.decode_revert_reason(e)
+                decoded_error = self.decode_revert_reason(e) #
+                logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH / award_usdc: {award_usdc} USDC")
                 logger.error(f"Decoded error: {decoded_error}")
                 raise Exception(decoded_error)
 
@@ -3752,7 +3759,8 @@ class GaeaDailyTask:
                 transaction = laurelnftlottery_contract.functions.lottery(phaseid, packeddata, signature).build_transaction(base_transaction)
                 logger.debug(f"lottery transaction: {transaction}")
             except Exception as e:
-                decoded_error = self.decode_revert_reason(e)
+                decoded_error = self.decode_revert_reason(e) #
+                logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} BNB / isUsed: {isUsed}")
                 logger.error(f"Decoded error: {decoded_error}")
                 raise Exception(decoded_error)
 
@@ -3902,7 +3910,8 @@ class GaeaDailyTask:
                     transaction = usdc_contract.functions.transfer(pooling_address, balance_usdc).build_transaction(base_transaction)
                     logger.debug(f"transfer transaction: {transaction}")
                 except Exception as e:
-                    decoded_error = self.decode_revert_reason(e)
+                    decoded_error = self.decode_revert_reason(e) #
+                    logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH / sender_usdc: {sender_usdc} USDC")
                     logger.error(f"Decoded error: {decoded_error}")
                     raise Exception(decoded_error)
 
@@ -3914,32 +3923,33 @@ class GaeaDailyTask:
 
                 logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction send successfully! - usdc: {balance_usdc/1_000_000}")
             
-            # # SXP账户余额
-            # sender_balance_sxp = sxp_contract.functions.balanceOf(sender_address).call()
-            # logger.debug(f"sender_balance_sxp: {sender_balance_sxp}")
-            # sender_sxp = web3_obj.from_wei(sender_balance_sxp, 'mwei')
-            # logger.debug(f"sender_sxp: {sender_sxp}")
-            # logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - sxp: {sender_sxp}")
-            # time.sleep(1)
-            # if 100000000 < sender_balance_sxp and pooling_addr != '': # 大于100开始归集SXP
-            #     # 使用公共函数构建基础交易参数
-            #     base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
-            #     try:
-            #         # 构建交易 - 转账
-            #         transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(base_transaction)
-            #         logger.debug(f"transfer transaction: {transaction}")
-            #     except Exception as e:
-            #         decoded_error = self.decode_revert_reason(e)
-            #         logger.error(f"Decoded error: {decoded_error}")
-            #         raise Exception(decoded_error)
+            # SXP账户余额
+            sender_balance_sxp = sxp_contract.functions.balanceOf(sender_address).call()
+            logger.debug(f"sender_balance_sxp: {sender_balance_sxp}")
+            sender_sxp = web3_obj.from_wei(sender_balance_sxp, 'mwei')
+            logger.debug(f"sender_sxp: {sender_sxp}")
+            logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} - sxp: {sender_sxp}")
+            time.sleep(1)
+            if 100000000 < sender_balance_sxp and pooling_addr != '': # 大于100开始归集SXP
+                # 使用公共函数构建基础交易参数
+                base_transaction = self.build_base_transaction(web3_obj, sender_address, WEB3_CHAINID)
+                try:
+                    # 构建交易 - 转账
+                    transaction = sxp_contract.functions.transfer(pooling_address, sender_balance_sxp).build_transaction(base_transaction)
+                    logger.debug(f"transfer transaction: {transaction}")
+                except Exception as e:
+                    decoded_error = self.decode_revert_reason(e) #
+                    logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH / sender_sxp: {sender_sxp} SXP")
+                    logger.error(f"Decoded error: {decoded_error}")
+                    raise Exception(decoded_error)
 
-            #     # 发送交易
-            #     tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # sxp.transfer
-            #     if tx_success == False:
-            #         logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
-            #         raise Exception("Failed to send_transaction.")
+                # 发送交易
+                tx_success, tx_msg = self.send_transaction_with_retry(web3_obj, transaction, self.client.prikey) # sxp.transfer
+                if tx_success == False:
+                    logger.error(f"Ooops! Failed to send_transaction. tx_msg: {tx_msg}")
+                    raise Exception("Failed to send_transaction.")
 
-            #     logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction send successfully! - sxp: {sender_sxp}")
+                logger.success(f"id: {self.client.id} userid: {self.client.userid} email: {self.client.email} The transfer transaction send successfully! - sxp: {sender_sxp}")
             
             return sender_usdc
         except Exception as error:
@@ -4016,7 +4026,8 @@ class GaeaDailyTask:
                     transaction = snft_contract.functions.transferFrom(sender_address, pooling_address, sender_nftid).build_transaction(base_transaction)
                     logger.debug(f"transferFrom transaction: {transaction}")
                 except Exception as e:
-                    decoded_error = self.decode_revert_reason(e)
+                    decoded_error = self.decode_revert_reason(e) #
+                    logger.warning(f"balance_eth: {web3_obj.from_wei(sender_balance_eth, 'ether')} ETH / sender_nftid: {sender_nftid}")
                     logger.error(f"Decoded error: {decoded_error}")
                     raise Exception(decoded_error)
 
